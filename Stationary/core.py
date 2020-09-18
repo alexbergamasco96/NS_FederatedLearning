@@ -21,18 +21,19 @@ class Server:
     
     def __init__(self, 
                  mean,
-                 cov,
                  workers, 
                  num_features, 
-                 model = linear_model.LinearRegression()
+                 model = linear_model.LinearRegression(),
+                 round_ = 1
                  ):
         
         self.mean = mean
-        self.cov = cov
         self.model = model
         self.workers = workers
         self.active_workers = len(workers)
         self.num_features = num_features
+        self.current_round = round_
+        self.aggregation_parameter = self.active_workers
     
     
     def aggregation(self):
@@ -42,14 +43,24 @@ class Server:
         """
         
         sum_mean = np.zeros(shape=self.num_features)
-        sum_cov =  np.zeros(shape=self.num_features) #change cov dimension
         
         for i in self.workers:
+            print(i.getMean())
             sum_mean = sum_mean + i.getMean()
-            sum_cov = sum_mean + i.getCov()
         
-        self.mean = sum_mean / self.active_workers
-        self.cov = sum_cov / self.active_workers
+        
+        if self.current_round == 1:
+            
+            # First round, no past-information. Aggregate only parameters coming from workers
+            self.mean = sum_mean / self.active_workers
+            self.current_round += 1
+            
+        else:
+            # Starting from the second round, we consider also past information
+            
+            self.mean = (self.mean * self.aggregation_parameter + sum_mean) / (self.aggregation_parameter + self.active_workers)
+            self.aggregation_parameter += self.active_workers
+            self.current_round += 1
         
         self.model.coef_ = self.mean
         
@@ -61,8 +72,7 @@ class Server:
         """
         for i in self.workers:
             i.mean = self.mean
-            i.cov = self.cov
-            i.num_workers = self.active_workers
+
         
     def evaluate(self, X):
         """
@@ -79,15 +89,12 @@ class Worker:
     
     def __init__(self,
                  mean,
-                 cov,
-                 model=linear_model.LinearRegression(),
-                 num_workers = 0
+                 model=linear_model.LinearRegression()
                  ):
         
         self.mean = mean
-        self.cov = cov
         self.model = model
-        self.num_workers = num_workers
+        self.current_mean = mean
         
         
     def train(self, X, y):
@@ -98,11 +105,9 @@ class Worker:
         
         self.model.fit(X,y)
         
-        #Attribute of sklearn.linear_model.LinearRegression()
-        new_mean = self.model.coef_
-        
-        self.mean = (self.mean * self.num_workers) / (self.num_workers + 1)  + (new_mean) / (self.num_workers + 1)
-        
+        #Sklearn.linear_model.LinearRegression() attribute
+        self.current_mean =  self.model.coef_
+        return self.current_mean
     
     def evaluate(self, X):
         """
@@ -117,16 +122,9 @@ class Worker:
         """
         Return the mean of the current predicted model
         """
-        return self.mean
+        return self.current_mean
     
-    
-    def getCov(self):
-        """
-        Return the computer covariance of the current predicted model
-        """
-        return self.cov
         
-
 
 """
 def main():
