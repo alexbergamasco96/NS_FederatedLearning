@@ -53,7 +53,6 @@ class Server:
         
         
         if self.current_round == 1:
-            
             # First round, no past-information. Aggregate only parameters coming from workers
             self.coef = sum_coef / self.active_workers
             self.intercept = sum_intercept / self.active_workers
@@ -67,8 +66,8 @@ class Server:
             self.aggregation_parameter += self.active_workers
             self.current_round += 1
         
-        self.model.coef_ = self.coef
-        self.model.intercept_ = self.intercept
+        self.model.coef_ = self.coef.copy()
+        self.model.intercept_ = self.intercept.copy()
         
         
     
@@ -116,16 +115,17 @@ class Worker:
         self.model.fit(X,y)
         
         #Sklearn.linear_model.LinearRegression() attribute
-        self.current_coef =  self.model.coef_
-        self.current_intercept = self.model.intercept_
+        self.current_coef =  self.model.coef_.copy()
+        self.current_intercept = self.model.intercept_.copy()
         #return self.current_mean
     
     def evaluate(self, X):
         """
         Worker-side evaluation of the model
         """
-        self.model.coef_ = self.current_coef
-        self.model.intercept_ = self.current_intercept
+        self.model.coef_ = self.coef.copy()
+        self.model.intercept_ = self.intercept.copy()
+        
         return self.model.predict(X)
         
     
@@ -134,22 +134,10 @@ class Worker:
         """
         Return the coefficients of the current predicted model
         """
-        return self.current_coef
+        return self.current_coef.copy()
     
     def getIntercept(self):
         """
         Return the intercept coefficient of the current predicted model
         """
-        return self.current_intercept
-    
-        
-
-"""
-def main():
-    print("Hello")
-    
-
-if __name__ == "__main__":
-    main()
-
-"""
+        return self.current_intercept.copy()
