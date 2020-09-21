@@ -8,7 +8,6 @@ Created on Mon Sep 14 17:42:58 2020
 
 import os
 import numpy as np
-import pandas as pd
 
 from sklearn import linear_model
 import scipy
@@ -20,15 +19,17 @@ class Server:
     """
     
     def __init__(self, 
-                 mean,
+                 coef,
+                 intercept,
                  workers, 
                  num_features, 
                  model = linear_model.LinearRegression(),
                  round_ = 1
                  ):
         
-        self.mean = mean
+        self.coef = coef
         self.model = model
+        self.intercept = intercept
         self.workers = workers
         self.active_workers = len(workers)
         self.num_features = num_features
@@ -42,27 +43,32 @@ class Server:
         Average between parameters
         """
         
-        sum_mean = np.zeros(shape=self.num_features)
+        sum_coef = np.zeros(shape=self.num_features)
+        
+        sum_intercept = np.zeros(shape=1)
         
         for i in self.workers:
-            print(i.getMean())
-            sum_mean = sum_mean + i.getMean()
+            sum_coef = sum_coef + i.getCoef()
+            sum_intercept = sum_intercept + i.getIntercept()
         
         
         if self.current_round == 1:
             
             # First round, no past-information. Aggregate only parameters coming from workers
-            self.mean = sum_mean / self.active_workers
+            self.coef = sum_coef / self.active_workers
+            self.intercept = sum_intercept / self.active_workers
             self.current_round += 1
             
         else:
             # Starting from the second round, we consider also past information
             
-            self.mean = (self.mean * self.aggregation_parameter + sum_mean) / (self.aggregation_parameter + self.active_workers)
+            self.coef = (self.coef * self.aggregation_parameter + sum_coef) / (self.aggregation_parameter + self.active_workers)
+            self.intercept = (self.intercept * self.aggregation_parameter + sum_intercept) / (self.aggregation_parameter + self.active_workers)
             self.aggregation_parameter += self.active_workers
             self.current_round += 1
         
-        self.model.coef_ = self.mean
+        self.model.coef_ = self.coef
+        self.model.intercept_ = self.intercept
         
         
     
@@ -71,7 +77,8 @@ class Server:
         Return the aggregated parameters to all the workers
         """
         for i in self.workers:
-            i.mean = self.mean
+            i.coef = self.coef
+            i.intercept = self.intercept
 
         
     def evaluate(self, X):
@@ -88,13 +95,16 @@ class Worker:
     """
     
     def __init__(self,
-                 mean,
+                 coef,
+                 intercept,
                  model=linear_model.LinearRegression()
                  ):
         
-        self.mean = mean
+        self.coef = coef
+        self.intercept = intercept
         self.model = model
-        self.current_mean = mean
+        self.current_coef = coef
+        self.current_intercept = intercept
         
         
     def train(self, X, y):
@@ -106,23 +116,31 @@ class Worker:
         self.model.fit(X,y)
         
         #Sklearn.linear_model.LinearRegression() attribute
-        self.current_mean =  self.model.coef_
-        return self.current_mean
+        self.current_coef =  self.model.coef_
+        self.current_intercept = self.model.intercept_
+        #return self.current_mean
     
     def evaluate(self, X):
         """
         Worker-side evaluation of the model
         """
-        self.model.coef_ = self.mean
+        self.model.coef_ = self.current_coef
+        self.model.intercept_ = self.current_intercept
         return self.model.predict(X)
         
     
     
-    def getMean(self): 
+    def getCoef(self): 
         """
-        Return the mean of the current predicted model
+        Return the coefficients of the current predicted model
         """
-        return self.current_mean
+        return self.current_coef
+    
+    def getIntercept(self):
+        """
+        Return the intercept coefficient of the current predicted model
+        """
+        return self.current_intercept
     
         
 
