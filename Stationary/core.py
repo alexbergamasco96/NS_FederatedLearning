@@ -15,7 +15,7 @@ import scipy
 
 class Server:
     """
-    Central Server in which we compute the aggregated modelm
+    Central Server in which we compute the aggregated model
     """
     
     def __init__(self, 
@@ -52,14 +52,15 @@ class Server:
             sum_intercept = sum_intercept + i.getIntercept()
         
         
+        # First round, no past-information. Aggregate only parameters coming from workers
         if self.current_round == 1:
-            # First round, no past-information. Aggregate only parameters coming from workers
+            
             self.coef = sum_coef / self.active_workers
             self.intercept = sum_intercept / self.active_workers
             self.current_round += 1
-            
+        
+        # Starting from the second round, we consider also past information
         else:
-            # Starting from the second round, we consider also past information
             
             self.coef = (self.coef * self.aggregation_parameter + sum_coef) / (self.aggregation_parameter + self.active_workers)
             self.intercept = (self.intercept * self.aggregation_parameter + sum_intercept) / (self.aggregation_parameter + self.active_workers)
