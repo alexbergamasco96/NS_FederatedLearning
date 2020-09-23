@@ -50,7 +50,9 @@ class Server:
         for i in self.workers:
             sum_coef = sum_coef + i.getCoef()
             sum_intercept = sum_intercept + i.getIntercept()
+            print("Intercept: {}".format(i.getIntercept()))
         
+        print("Sum: {}".format(sum_intercept / self.active_workers))
         
         # First round, no past-information. Aggregate only parameters coming from workers
         if self.current_round == 1:
