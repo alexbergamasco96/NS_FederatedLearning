@@ -16,7 +16,6 @@ def splitDataset(dataset_X, num_workers, num_rounds):
     a = num_workers * num_rounds
     
     b = math.floor(len(dataset_X)/a)
-    
     x = len(dataset_X) / b
     
         
