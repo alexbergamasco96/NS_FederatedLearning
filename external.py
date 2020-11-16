@@ -36,8 +36,8 @@ torch.manual_seed(0)
 
 
 #-----Federated Parameters
-num_workers = 16
-num_rounds = 20
+num_workers = 8
+num_rounds = 30
 
 
 #-----Linear Regression Parameters
@@ -46,18 +46,18 @@ m2 = 1.4
 m3 = -0.5
 c = 1.4
 a = 0.1
-v = 0.2    #noise variance
+v = 40    #noise variance
 range_min = 0    #min value of X
-range_max = 20    #max value of X
-dataset_size = 8000    #dataset size
+range_max = 10    #max value of X
+dataset_size = 3000    #dataset size
 
 
 
 #-----FedAVG Parameters
-learning_rate = 1e-3
+learning_rate = 1e-5
 local_epochs = 300
 lr_gamma_FedREG = 1
-lr_gamma_FedAVG = 0.8
+lr_gamma_FedAVG = 0.9
 
 #-----Execution Parameters
 iterations = 20
@@ -82,15 +82,11 @@ class customModel(torch.nn.Module):
         
         super(customModel, self).__init__()
         self.linear = torch.nn.Linear(inputSize, H, bias=True)
-        self.linear2 = torch.nn.Linear(H, H)
-        self.linear3 = torch.nn.Linear(H, H)
         self.linear4 = torch.nn.Linear(H, outputSize)
 
         
     def forward(self, x):
-        x = torch.tanh(self.linear(x))
-        x = torch.tanh(self.linear2(x))
-        x = torch.tanh(self.linear3(x))
+        x = F.relu(self.linear(x))
         x = self.linear4(x)
         return x
 
@@ -111,8 +107,8 @@ def synthetic_dataset_creator(multi_features=False):
         np.random.shuffle(dataset_X3)
 
         dataset_X = np.array([dataset_X1, dataset_X2, dataset_X3])
-        #dataset_y = dataset_X1 * m + dataset_X2 * m2 + dataset_X3 * m3 + c + np.random.randn(dataset_X1.size) * math.sqrt(v)
-        dataset_y = m * np.sin(dataset_X1*(a*math.pi)+ dataset_X2*(a*math.pi) + dataset_X3*(a*math.pi)) + np.random.randn(dataset_X1.size) * math.sqrt(v)
+        dataset_y = dataset_X1 * m + dataset_X2 * m2 + dataset_X3 * m3 + c + np.random.randn(dataset_X1.size) * math.sqrt(v)
+        #dataset_y = m * np.sin(dataset_X1*(a*math.pi)+ dataset_X2*(a*math.pi) + dataset_X3*(a*math.pi)) + np.random.randn(dataset_X1.size) * math.sqrt(v)
         dataset_y = dataset_y.reshape(-1,1)
         dataset_X = dataset_X.transpose()
         
@@ -121,8 +117,8 @@ def synthetic_dataset_creator(multi_features=False):
         dataset_X = np.random.uniform(low=range_min, high=range_max, size=(dataset_size,))
         np.random.shuffle(dataset_X)
 
-        #dataset_y =  dataset_X * m + c +  np.random.randn(dataset_X.size) * math.sqrt(v)
-        dataset_y = m * np.sin(dataset_X*(a*math.pi)) + np.random.randn(dataset_X.size) * math.sqrt(v)
+        dataset_y =  dataset_X * m + c +  np.random.randn(dataset_X.size) * math.sqrt(v)
+        #dataset_y = m * np.sin(dataset_X*(a*math.pi)) + np.random.randn(dataset_X.size) * math.sqrt(v)
         
         dataset_X = dataset_X.reshape(-1,1)
         dataset_y = dataset_y.reshape(-1,1)
@@ -321,12 +317,12 @@ def single_iteration(seed):
     
     ### Dataset Creation
     
-    train_list_X, train_list_y, test_X, test_y = synthetic_dataset_creator(multi_features=False)
+    train_list_X, train_list_y, test_X, test_y = synthetic_dataset_creator(multi_features=True)
     
     
     w, w_avg = model_creator(   input_size=len(train_list_X[0][0]), 
                                 output_size=len(train_list_y[0][0]), 
-                                hidden=64
+                                hidden=20
                             )
 
     criterion, optimizers = loss_optimizer(models=w, gamma=lr_gamma_FedREG, decay=False)
@@ -405,7 +401,7 @@ def single_iteration(seed):
     
     ### FEDAVG - INITIALIZATION
     
-    criterion_avg, optimizers_avg = loss_optimizer(models=w_avg, gamma=lr_gamma_FedAVG, decay=False)
+    criterion_avg, optimizers_avg = loss_optimizer(models=w_avg, gamma=lr_gamma_FedAVG, decay=True)
     
         
     params = get_models_parameters(w_avg)
@@ -438,7 +434,7 @@ def single_iteration(seed):
                     inputs=train_list_X[i*num_workers+j],
                     labels=train_list_y[i*num_workers+j],
                     local_epochs=local_epochs,
-                    decay=False,
+                    decay=True,
                     input_len = len(train_list_X[i*num_workers+j]))
         
             

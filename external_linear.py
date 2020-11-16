@@ -36,8 +36,8 @@ torch.manual_seed(0)
 
 
 #-----Federated Parameters
-num_workers = 16
-num_rounds = 20
+num_workers = 8
+num_rounds = 30
 
 
 #-----Linear Regression Parameters
@@ -46,18 +46,18 @@ m2 = 1.4
 m3 = -0.5
 c = 1.4
 a = 0.1
-v = 0.2    #noise variance
+v = 40    #noise variance
 range_min = 0    #min value of X
-range_max = 20    #max value of X
-dataset_size = 8000    #dataset size
+range_max = 10    #max value of X
+dataset_size = 3000    #dataset size
 
 
 
 #-----FedAVG Parameters
-learning_rate = 1e-3
+learning_rate = 1e-4
 local_epochs = 300
 lr_gamma_FedREG = 1
-lr_gamma_FedAVG = 0.8
+lr_gamma_FedAVG = 0.5
 
 #-----Execution Parameters
 iterations = 20
@@ -78,20 +78,16 @@ def set_new_seed(x):
 
 class customModel(torch.nn.Module):
     
-    def __init__(self, inputSize, outputSize, H = 64):
+    def __init__(self, inputSize, outputSize, H = 20):
         
         super(customModel, self).__init__()
         self.linear = torch.nn.Linear(inputSize, H, bias=True)
-        self.linear2 = torch.nn.Linear(H, H)
-        self.linear3 = torch.nn.Linear(H, H)
-        self.linear4 = torch.nn.Linear(H, outputSize)
+        self.linear2 = torch.nn.Linear(H, outputSize)
 
         
     def forward(self, x):
-        x = torch.tanh(self.linear(x))
-        x = torch.tanh(self.linear2(x))
-        x = torch.tanh(self.linear3(x))
-        x = self.linear4(x)
+        x = self.linear(x)
+        x = self.linear2(x)
         return x
 
     
@@ -140,13 +136,6 @@ def synthetic_dataset_creator(multi_features=False):
     train_list_X = splitDataset(train_X, num_workers, num_rounds)
     train_list_y = splitDataset(train_y, num_workers, num_rounds)
     
-
-    for i in range(0, len(train_list_X)):
-        train_list_X[i] = torch.from_numpy(train_list_X[i])
-
-    for i in range(0, len(train_list_y)):
-        train_list_y[i] = torch.from_numpy(train_list_y[i])
-    
     
     return train_list_X, train_list_y, test_X, test_y    
     
@@ -154,18 +143,14 @@ def synthetic_dataset_creator(multi_features=False):
     
     
 
-def model_creator(input_size, output_size, hidden=10):
-    
-    w = []
-    w.append(customModel(input_size, output_size, H=hidden))
-    for i in range(1, num_workers):
-        w.append(copy.deepcopy(w[0]))
+def model_creator(input_size, output_size, hidden=20):
     
     w_avg = []
-    for i in range(0, num_workers):
-        w_avg.append(copy.deepcopy(w[0]))
+    w_avg.append(customModel(input_size, output_size, H=hidden))
+    for i in range(1, num_workers):
+        w_avg.append(copy.deepcopy(w_avg[0]))
         
-    return w, w_avg
+    return w_avg
 
 
 
@@ -321,78 +306,45 @@ def single_iteration(seed):
     
     ### Dataset Creation
     
-    train_list_X, train_list_y, test_X, test_y = synthetic_dataset_creator(multi_features=False)
+    train_list_X, train_list_y, test_X, test_y = synthetic_dataset_creator(multi_features=True)
     
     
-    w, w_avg = model_creator(   input_size=len(train_list_X[0][0]), 
-                                output_size=len(train_list_y[0][0]), 
-                                hidden=64
-                            )
-
-    criterion, optimizers = loss_optimizer(models=w, gamma=lr_gamma_FedREG, decay=False)
     
-        
-    params = get_models_parameters(models_list=w)
-        
-        
-    for model in w:
-        model.train()
+    
+    worker_list = []
+    
+    for i in range(0, num_workers):
+        worker_list.append(Worker(coef = np.zeros(shape=train_list_X[0][0].size), 
+                                  intercept = np.zeros(shape=1), 
+                                  model=linear_model.LinearRegression()))
 
 
-    # stores losses trend for each worker along epochs
-    worker_losses_dict = defaultdict(list)
-
+    server = Server(coef = np.zeros(shape=train_list_X[0][0].size), 
+                    intercept = np.zeros(shape=1), 
+                    workers = worker_list, 
+                    num_features = train_list_X[0][0].size)
+    
     error = []
     score = []
 
 
-    ### OUR ALGORITHM - EXECUTION
-    
-    # Parameter 'c' of FedREG algorithm
-    c = 0
-    
-    global_params = calculate_FedAVG_params(w, params)
-    
-    
-    # EXECUTION
+
     for i in range(0, num_rounds):
-        
+
         for j in range(0, num_workers):
-            train(  model=w[j],
-                    optimizer=optimizers[j],
-                    criterion=criterion[j],
-                    inputs=train_list_X[i*num_workers+j],
-                    labels=train_list_y[i*num_workers+j],
-                    local_epochs=local_epochs,
-                    decay=False,
-                    input_len=len(train_list_X[i*num_workers+j]))
-        
-            
-        # Get the params
-        params = get_models_parameters(w)
-        
-        
-        # Parameter Aggregation
-        with torch.no_grad():
 
-            new_params = sum_of_params(w, params)
-            
-            # Calculate the aggregated parameters with our method
-            global_params = calculate_FedREG_params(w, global_params, new_params, c)
-            
-            # Set new aggregated parameters
-            set_parameters(global_params, w)
-        
-        
-            # Perform the prediction
-            predicted = w[0](Variable(torch.from_numpy(test_X).float())).data.numpy()
+            worker_list[j].train(X = train_list_X[i*num_workers+j] , y = train_list_y[i*num_workers+j])
+            pred_worker = worker_list[j].evaluate(test_X)
 
-            error.append(mean_squared_error(test_y, predicted))
-            score.append(r2_score(test_y, predicted))
+
         
-        # Update parameter C
-        c = c + len(w)
+        server.aggregation() 
+        server.return_to_workers()
+        prediction = worker_list[0].evaluate(test_X)
         
+        error.append(mean_squared_error(test_y, prediction))
+        score.append(r2_score(test_y, prediction))
+
 
 
     ### -----------------------------------------------------------------------
@@ -401,11 +353,21 @@ def single_iteration(seed):
     ### -----------------------------------------------------------------------
     
     
+    for i in range(0, len(train_list_X)):
+        train_list_X[i] = torch.from_numpy(train_list_X[i])
 
+    for i in range(0, len(train_list_y)):
+        train_list_y[i] = torch.from_numpy(train_list_y[i])
+    
     
     ### FEDAVG - INITIALIZATION
     
-    criterion_avg, optimizers_avg = loss_optimizer(models=w_avg, gamma=lr_gamma_FedAVG, decay=False)
+    w_avg = model_creator( input_size=len(train_list_X[0][0]), 
+                           output_size=len(train_list_y[0][0]), 
+                           hidden=20
+                         )
+    
+    criterion_avg, optimizers_avg = loss_optimizer(models=w_avg, gamma=lr_gamma_FedAVG, decay=True)
     
         
     params = get_models_parameters(w_avg)
@@ -438,7 +400,7 @@ def single_iteration(seed):
                     inputs=train_list_X[i*num_workers+j],
                     labels=train_list_y[i*num_workers+j],
                     local_epochs=local_epochs,
-                    decay=False,
+                    decay=True,
                     input_len = len(train_list_X[i*num_workers+j]))
         
             
