@@ -111,8 +111,8 @@ def synthetic_dataset_creator(multi_features=False):
         np.random.shuffle(dataset_X3)
 
         dataset_X = np.array([dataset_X1, dataset_X2, dataset_X3])
-        #dataset_y = dataset_X1 * m + dataset_X2 * m2 + dataset_X3 * m3 + c + np.random.randn(dataset_X1.size) * math.sqrt(v)
-        dataset_y = m * np.sin(dataset_X1*(a*math.pi)+ dataset_X2*(a*math.pi) + dataset_X3*(a*math.pi)) + np.random.randn(dataset_X1.size) * math.sqrt(v)
+        dataset_y = dataset_X1 * m + dataset_X2 * m2 + dataset_X3 * m3 + c + np.random.randn(dataset_X1.size) * math.sqrt(v)
+        #dataset_y = m * np.sin(dataset_X1*(a*math.pi)+ dataset_X2*(a*math.pi) + dataset_X3*(a*math.pi)) + np.random.randn(dataset_X1.size) * math.sqrt(v)
         dataset_y = dataset_y.reshape(-1,1)
         dataset_X = dataset_X.transpose()
         
@@ -121,8 +121,8 @@ def synthetic_dataset_creator(multi_features=False):
         dataset_X = np.random.uniform(low=range_min, high=range_max, size=(dataset_size,))
         np.random.shuffle(dataset_X)
 
-        #dataset_y =  dataset_X * m + c +  np.random.randn(dataset_X.size) * math.sqrt(v)
-        dataset_y = m * np.sin(dataset_X*(a*math.pi)) + np.random.randn(dataset_X.size) * math.sqrt(v)
+        dataset_y =  dataset_X * m + c +  np.random.randn(dataset_X.size) * math.sqrt(v)
+        #dataset_y = m * np.sin(dataset_X*(a*math.pi)) + np.random.randn(dataset_X.size) * math.sqrt(v)
         
         dataset_X = dataset_X.reshape(-1,1)
         dataset_y = dataset_y.reshape(-1,1)
