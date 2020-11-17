@@ -37,7 +37,7 @@ torch.manual_seed(0)
 
 #-----Federated Parameters
 num_workers = 4
-num_rounds = 20
+num_rounds = 30
 
 
 #-----Linear Regression Parameters
@@ -46,10 +46,10 @@ m2 = 1.4
 m3 = -0.5
 c = 1.4
 a = 0.1
-v = 0.7    #noise variance
+v = 0.3    #noise variance
 range_min = 0    #min value of X
 range_max = 20    #max value of X
-dataset_size = 3000    #dataset size
+dataset_size = 4500    #dataset size
 
 
 
