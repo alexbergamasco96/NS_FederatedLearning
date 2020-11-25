@@ -25,7 +25,7 @@ from torch.autograd import Variable
 
 
 
-def loss_optimizer(models, learning_rate, gamma, local_epochs, decay=True):
+def loss_optimizer(models, learning_rate, gamma, local_epochs, decay=False):
     
     optimizers = []
     criterion = []
@@ -35,8 +35,8 @@ def loss_optimizer(models, learning_rate, gamma, local_epochs, decay=True):
         
         if decay is True:
             optimizers.append(torch.optim.lr_scheduler.StepLR(torch.optim.SGD(i.parameters(), lr=learning_rate),
-                                                          step_size = local_epochs,
-                                                          gamma=gamma))
+                                                              step_size = local_epochs,
+                                                              gamma=gamma))
         else:    
             optimizers.append(torch.optim.SGD(i.parameters(), lr=learning_rate))   
     
@@ -56,33 +56,6 @@ def get_models_parameters(models_list):
     
 
     
-    
-    
-def train(model, criterion, optimizer, inputs, labels, local_epochs, decay, input_len):
-    
-    for epoch in range(local_epochs):
-        
-        if decay is True:
-            optimizer.optimizer.zero_grad()
-        else:
-            optimizer.zero_grad()
-        
-        loss = 0
-
-        for x in range(input_len):
-            input_ = (inputs[x]).float()
-            input_ = input_.unsqueeze(0)
-            label = (labels[x]).float()
-            label = label.unsqueeze(0)
-            y_pred = model(input_)
-            loss += criterion(y_pred, label)
-
-        loss.backward()
-        
-        if decay is True:
-            optimizer.optimizer.step()
-        else:
-            optimizer.step()
         
     
     
@@ -123,7 +96,7 @@ def calculate_FedREG_params(models, global_params, new_params, c):
     
     
     
-def calculate_FedREG_params_with_adaption(global_params, new_params, current_round, c):
+def calculate_FedREG_params_with_adaption(models, global_params, new_params, current_round, c):
     '''
         global_params:  last aggregated parameters
         new_params:     average of parameters received at this round
@@ -146,13 +119,15 @@ def calculate_FedREG_params_with_adaption(global_params, new_params, current_rou
             beta = 1
         else:
             # If distance = inf, then beta is 0 and the algorithm becomes FedAVG
-            beta = 1 / (1 + distance) 
-
+            beta = (1 / (1 + distance)) 
+        
+        
         for i in range(len(global_params)):
             for j in range(len(global_params[i])):
-                global_params[i][j] = ((c *beta* global_params[i][j] + new_params[i][j]) / (c*beta + len(w))).data.detach().clone()
+                global_params[i][j] = ((c *beta* global_params[i][j] + new_params[i][j]) / (c*beta + len(models))).data.detach().clone()
     
-    return global_params
+    
+    return global_params, beta
     
     
     
@@ -193,3 +168,59 @@ def set_parameters(new, models):
             for p in models[remote_index].parameters():
                 p.data = new[param_index].data.detach().clone()
                 param_index += 1
+       
+
+    
+def trainInBatch(model, criterion, optimizer, inputs, labels, local_epochs, input_len, batch_size=4, decay=False):
+    
+    
+    for epoch in range(local_epochs):
+        
+        
+        permutation = torch.randperm(inputs.size()[0])
+        
+        for i in range(0, inputs.size()[0], batch_size):
+            
+            optimizer.zero_grad()
+
+            indices = permutation[i:i+batch_size]
+            batch_x, batch_y = inputs[indices], labels[indices]
+            
+            y_pred = model.forward(batch_x.float())
+            loss = criterion(y_pred,batch_y.float())
+
+            loss.backward()
+            optimizer.step()
+        
+    
+
+def train(model, criterion, optimizer, inputs, labels, local_epochs, input_len, batch_size=4, decay=False):
+    
+    for epoch in range(local_epochs):
+        
+        if decay is True:
+            optimizer.optimizer.zero_grad()
+        else:
+            optimizer.zero_grad()
+        
+        loss = 0 
+        
+   
+        for x in range(input_len):
+            input_ = (inputs[x]).float()
+            input_ = input_.unsqueeze(0)
+            label = (labels[x]).float()
+            label = label.unsqueeze(0)
+            y_pred = model(input_)
+            loss += criterion(y_pred, label)
+        
+        
+        loss.backward()
+        
+        if decay is True:
+            optimizer.optimizer.step()
+        else:
+            optimizer.step()
+ 
+
+

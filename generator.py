@@ -39,18 +39,20 @@ torch.manual_seed(0)
 
 #-----Federated Parameters
 num_workers = 4
-num_rounds = 10
+num_rounds = 40
 
-dataset_size = 500    #dataset size
+dataset_size = 6000    #dataset size
 multifeatures = False
+model_drift = True
 
 
 learning_rate = 1e-3
-local_epochs = 100
+local_epochs = 300
 
 lr_gamma_FedREG = 1
-lr_gamma_FedAVG = 0.9
+lr_gamma_FedAVG = 0.8
 
+lr_decay = True
 
 
 
@@ -69,16 +71,21 @@ def single_iteration(seed):
     
     ### Dataset Creation
     
-    train_list_X, train_list_y, test_X, test_y = synthetic_dataset_creator(dataset_size, num_workers, num_rounds, multi_features=multifeatures)
+    train_list_X, train_list_y, test_X, test_y = synthetic_dataset_creator(dataset_size, num_workers, num_rounds, multi_features=multifeatures, model_drift=model_drift)
     
     
     w, w_avg = model_creator(   input_size=len(train_list_X[0][0]), 
                                 output_size=len(train_list_y[0][0]), 
                                 num_workers=num_workers,
-                                hidden=64
+                                hidden=64,
+                                model_type='periodic'
                             )
 
-    criterion, optimizers = loss_optimizer(models=w, learning_rate=learning_rate, gamma=lr_gamma_FedREG, decay=False, local_epochs=local_epochs)
+    criterion, optimizers = loss_optimizer(models=w, 
+                                           learning_rate=learning_rate, 
+                                           gamma=lr_gamma_FedREG, 
+                                           decay=False, 
+                                           local_epochs=local_epochs)
     
         
     params = get_models_parameters(models_list=w)
@@ -86,10 +93,6 @@ def single_iteration(seed):
         
     for model in w:
         model.train()
-
-
-    # stores losses trend for each worker along epochs
-    worker_losses_dict = defaultdict(list)
 
     error = []
     score = []
@@ -106,8 +109,23 @@ def single_iteration(seed):
     # EXECUTION
     for i in range(0, num_rounds):
         
+        # Two different test sets, one for each dataset:
+        # before drift and after drift
+        
+        if model_drift:
+            if i < (num_rounds/2):
+                current_test_X = test_X[0]
+                current_test_y = test_y[0]
+            else:
+                current_test_X = test_X[1]
+                current_test_y = test_y[1]
+        else:
+            current_test_X = test_X[0]
+            current_test_y = test_y[0]
+            
+            
         for j in range(0, num_workers):
-            train(  model=w[j],
+            trainInBatch(  model=w[j],
                     optimizer=optimizers[j],
                     criterion=criterion[j],
                     inputs=train_list_X[i*num_workers+j],
@@ -127,23 +145,33 @@ def single_iteration(seed):
             new_params = sum_of_params(w, params)
             
             # Calculate the aggregated parameters with our method
-            global_params = calculate_FedREG_params(w, global_params, new_params, c)
+            global_params, beta = calculate_FedREG_params_with_adaption( models=w, 
+                                                                   global_params=global_params, 
+                                                                   new_params=new_params, 
+                                                                   current_round=i,
+                                                                   c=c)
             
             # Set new aggregated parameters
             set_parameters(global_params, w)
         
         
             # Perform the prediction
-            predicted = w[0](Variable(torch.from_numpy(test_X).float())).data.numpy()
-
-            error.append(mean_squared_error(test_y, predicted))
-            score.append(r2_score(test_y, predicted))
+            #predicted = w[0](Variable(torch.from_numpy(current_test_X).float())).data.numpy()
+            predicted = w[0](torch.from_numpy(current_test_X).float()).data.numpy()
+            
+            
+            error.append(mean_squared_error(current_test_y, predicted))
+            score.append(r2_score(current_test_y, predicted))
+        
+        f = open("log_file.txt", "a")
+        f.write("PARAMETER C: {}\n".format(c))
+        f.close()
         
         # Update parameter C
-        c = c + len(w)
+        c = c*beta + len(w)
         
 
-
+        
     ### -----------------------------------------------------------------------
     ### -----------------------------------------------------------------------
     ### -----------------------------------------------------------------------
@@ -154,7 +182,11 @@ def single_iteration(seed):
     
     ### FEDAVG - INITIALIZATION
     
-    criterion_avg, optimizers_avg = loss_optimizer(models=w_avg, learning_rate=learning_rate, gamma=lr_gamma_FedAVG, decay=True, local_epochs=local_epochs)
+    criterion_avg, optimizers_avg = loss_optimizer(models=w_avg, 
+                                                   learning_rate=learning_rate, 
+                                                   gamma=lr_gamma_FedAVG, 
+                                                   decay=False, 
+                                                   local_epochs=(local_epochs-10))
     
         
     params = get_models_parameters(w_avg)
@@ -162,9 +194,6 @@ def single_iteration(seed):
         
     for model in w_avg:
         model.train()
-    
-    # stores losses trend for each worker along epochs
-    worker_losses_dict = defaultdict(list)
     
     
     error_fedavg = []
@@ -180,16 +209,34 @@ def single_iteration(seed):
     
     for i in range(0, num_rounds):
         
+        if model_drift:
+            if i < (num_rounds/2):
+                current_test_X = test_X[0]
+                current_test_y = test_y[0]
+            else:
+                current_test_X = test_X[1]
+                current_test_y = test_y[1]
+        else:
+            current_test_X = test_X[0]
+            current_test_y = test_y[0]
+            
+        
         for j in range(0, num_workers):
-            train(  model=w_avg[j],
+            trainInBatch(  model=w_avg[j],
                     optimizer=optimizers_avg[j],
                     criterion=criterion_avg[j],
                     inputs=train_list_X[i*num_workers+j],
                     labels=train_list_y[i*num_workers+j],
                     local_epochs=local_epochs,
-                    decay=True,
+                    decay=False,
                     input_len = len(train_list_X[i*num_workers+j]))
-        
+            
+            if lr_decay:
+                with torch.no_grad():
+                    # Learning Rate Decay
+                    for g in optimizers_avg[j].param_groups:
+                        g['lr'] = learning_rate / (1 + (i+1))
+
             
         # Get the params
         params = get_models_parameters(w_avg)
@@ -200,12 +247,17 @@ def single_iteration(seed):
             new_params = calculate_FedAVG_params(w_avg, params)
 
             set_parameters(new_params, w_avg)
-
-            predicted = w_avg[0](Variable(torch.from_numpy(test_X).float())).data.numpy()
             
-            error_fedavg.append(mean_squared_error(test_y, predicted))
-            score_fedavg.append(r2_score(test_y, predicted))
+            
+            #predicted = w_avg[0](Variable(torch.from_numpy(current_test_X).float())).data.numpy()
+            predicted = w_avg[0](torch.from_numpy(current_test_X).float()).data.numpy()
+            
+            error_fedavg.append(mean_squared_error(current_test_y, predicted))
+            score_fedavg.append(r2_score(current_test_y, predicted))
         
-     
+        for g in optimizers_avg[j].param_groups:
+            f = open("log_file.txt", "a")
+            f.write("LR {}\n".format(g['lr']))
+            f.close()
     
     return error, score, error_fedavg, score_fedavg

@@ -25,18 +25,33 @@ from collections import defaultdict
 from torch.autograd import Variable
 
 
-train_percentage = 0.8
+
 
 #-----Linear Regression Parameters
-m = -2.1
+
+## No Drift:
+m = -10.1
 m2 = 1.4
 m3 = -0.5
 c = 1.4
 a = 0.1
-v = 0.3    #noise variance
+v = 0.5    #noise variance
+
+drifts = 2
+## After Drift
+mm = -6
+mm2 = 2.2
+mm3 = 0.2
+cc = -3
+aa = 0.1
+vv = 0.5   #noise variance
+
+
 range_min = 0    #min value of X
 range_max = 20    #max value of X
-dataset_size = 4500    #dataset size
+train_percentage = 0.8
+
+
 
 
 '''
@@ -52,10 +67,39 @@ def splitDataset(dataset_X, num_workers, num_rounds):
     
         
     return np.array_split(dataset_X, x)
+
+
+def synthetic_dataset_creator(dataset_size, num_workers, num_rounds, multi_features=False, model_drift=False):
+
+    train_list_X = [] 
+    train_list_y = []
+    test_X = []
+    test_y = []
     
+    if model_drift :
+        
+        after_drift=False
+        
+        for i in range(drifts):
+            
+            tr_X, tr_y, t_X, t_y = generate_data(int(dataset_size/drifts), num_workers, int(num_rounds/drifts), after_drift, multi_features)
+            
+            for j in range(len(tr_X)):
+                train_list_X.append(tr_X[j])
+                train_list_y.append(tr_y[j])
+            
+            test_X.append(t_X)
+            test_y.append(t_y)
+            
+            after_drift=True
+        
+    else:
+        train_list_X, train_list_y, test_X, test_y = generate_data(dataset_size, num_workers, num_rounds, multi_features)
+    
+    return train_list_X, train_list_y, test_X, test_y
 
 
-def synthetic_dataset_creator(dataset_size, num_workers, num_rounds, multi_features=False):
+def generate_data(dataset_size, num_workers, num_rounds, after_drift=False, multi_features=False):
     
     if multi_features is True:
         
@@ -66,10 +110,17 @@ def synthetic_dataset_creator(dataset_size, num_workers, num_rounds, multi_featu
         np.random.shuffle(dataset_X1)
         np.random.shuffle(dataset_X2)
         np.random.shuffle(dataset_X3)
-
+        
         dataset_X = np.array([dataset_X1, dataset_X2, dataset_X3])
-        #dataset_y = dataset_X1 * m + dataset_X2 * m2 + dataset_X3 * m3 + c + np.random.randn(dataset_X1.size) * math.sqrt(v)
-        dataset_y = m * np.sin(dataset_X1*(a*math.pi)+ dataset_X2*(a*math.pi) + dataset_X3*(a*math.pi)) + np.random.randn(dataset_X1.size) * math.sqrt(v)
+        
+        
+        if after_drift:
+            #dataset_y = dataset_X1 * mm + dataset_X2 * mm2 + dataset_X3 * mm3 + cc + np.random.randn(dataset_X1.size) * math.sqrt(v)
+            dataset_y = mm * np.sin(dataset_X1*(aa*math.pi)+ dataset_X2*(aa*math.pi) + dataset_X3*(aa*math.pi)) + np.random.randn(dataset_X1.size) * math.sqrt(vv)
+        else:
+            #dataset_y = dataset_X1 * m + dataset_X2 * m2 + dataset_X3 * m3 + c + np.random.randn(dataset_X1.size) * math.sqrt(v)
+            dataset_y = m * np.sin(dataset_X1*(a*math.pi)+ dataset_X2*(a*math.pi) + dataset_X3*(a*math.pi)) + np.random.randn(dataset_X1.size) * math.sqrt(v)
+            
         dataset_y = dataset_y.reshape(-1,1)
         dataset_X = dataset_X.transpose()
         
@@ -77,10 +128,14 @@ def synthetic_dataset_creator(dataset_size, num_workers, num_rounds, multi_featu
         
         dataset_X = np.random.uniform(low=range_min, high=range_max, size=(dataset_size,))
         np.random.shuffle(dataset_X)
-
-        #dataset_y =  dataset_X * m + c +  np.random.randn(dataset_X.size) * math.sqrt(v)
-        dataset_y = m * np.sin(dataset_X*(a*math.pi)) + np.random.randn(dataset_X.size) * math.sqrt(v)
         
+        if after_drift:
+            #dataset_y =  dataset_X * mm + cc +  np.random.randn(dataset_X.size) * math.sqrt(v)
+            dataset_y = mm * np.sin(dataset_X*(aa*math.pi)) + cc + np.random.randn(dataset_X.size) * math.sqrt(vv)
+        else:
+            #dataset_y =  dataset_X * m + c +  np.random.randn(dataset_X.size) * math.sqrt(v)
+            dataset_y = m * np.sin(dataset_X*(a*math.pi)) + c + np.random.randn(dataset_X.size) * math.sqrt(v)
+
         dataset_X = dataset_X.reshape(-1,1)
         dataset_y = dataset_y.reshape(-1,1)
     
@@ -106,3 +161,6 @@ def synthetic_dataset_creator(dataset_size, num_workers, num_rounds, multi_featu
     
     
     return train_list_X, train_list_y, test_X, test_y
+
+
+
