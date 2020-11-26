@@ -29,22 +29,24 @@ from torch.autograd import Variable
 
 #-----Linear Regression Parameters
 
+drifts = 1
+
 ## No Drift:
 m = -10.1
 m2 = 1.4
 m3 = -0.5
 c = 1.4
 a = 0.1
-v = 0.5    #noise variance
+v = 1    #noise variance
 
-drifts = 2
+
 ## After Drift
 mm = -6
 mm2 = 2.2
 mm3 = 0.2
 cc = -3
-aa = 0.1
-vv = 0.5   #noise variance
+aa = 0.15
+vv = 1   #noise variance
 
 
 range_min = 0    #min value of X
@@ -69,6 +71,12 @@ def splitDataset(dataset_X, num_workers, num_rounds):
     return np.array_split(dataset_X, x)
 
 
+
+'''
+Two main IF:
+- model_drift is TRUE: this means that the method generated two datasets, one for the first [num_rounds/2] rounds, and one for the remaining rounds.
+- multi_features is TRUE: return a dataset with three inputs, and one output.
+'''
 def synthetic_dataset_creator(dataset_size, num_workers, num_rounds, multi_features=False, model_drift=False):
 
     train_list_X = [] 
@@ -80,9 +88,12 @@ def synthetic_dataset_creator(dataset_size, num_workers, num_rounds, multi_featu
         
         after_drift=False
         
-        for i in range(drifts):
-            
-            tr_X, tr_y, t_X, t_y = generate_data(int(dataset_size/drifts), num_workers, int(num_rounds/drifts), after_drift, multi_features)
+        for i in range(drifts+1):
+            tr_X, tr_y, t_X, t_y = generate_data(int(dataset_size/drifts), 
+                                                 num_workers, 
+                                                 int(num_rounds/drifts), 
+                                                 after_drift, 
+                                                 multi_features)
             
             for j in range(len(tr_X)):
                 train_list_X.append(tr_X[j])
@@ -94,7 +105,10 @@ def synthetic_dataset_creator(dataset_size, num_workers, num_rounds, multi_featu
             after_drift=True
         
     else:
-        train_list_X, train_list_y, test_X, test_y = generate_data(dataset_size, num_workers, num_rounds, multi_features)
+        train_list_X, train_list_y, test_X, test_y = generate_data(dataset_size, 
+                                                                   num_workers, 
+                                                                   num_rounds, 
+                                                                   multi_features)
     
     return train_list_X, train_list_y, test_X, test_y
 

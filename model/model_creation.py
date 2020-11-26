@@ -30,16 +30,14 @@ class periodicModel(torch.nn.Module):
         self.linear = torch.nn.Linear(inputSize, H, bias=True)
         self.linear2 = torch.nn.Linear(H, H, bias=True)
         self.linear3 = torch.nn.Linear(H, H, bias=True)
-        self.linear4 = torch.nn.Linear(H, H, bias=True)
-        self.linear5 = torch.nn.Linear(H, outputSize)
+        self.linear4 = torch.nn.Linear(H, outputSize)
 
         
     def forward(self, x):
         x = torch.tanh(self.linear(x))
         x = torch.tanh(self.linear2(x))
         x = torch.tanh(self.linear3(x))
-        x = torch.tanh(self.linear4(x))
-        x = self.linear5(x)
+        x = self.linear4(x)
         return x
 
     

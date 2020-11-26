@@ -26,13 +26,18 @@ from torch.autograd import Variable
 
 
 def loss_optimizer(models, learning_rate, gamma, local_epochs, decay=False):
-    
+    '''
+    Set of instances. 
+    decay = True is used only when there is a decay within the local epochs
+    '''
     optimizers = []
     criterion = []
     
     for i in models:
+        # Loss: Mean Squared Error
         criterion.append(torch.nn.MSELoss()) 
         
+        # Optimizer: Stochastic Gradient Descent
         if decay is True:
             optimizers.append(torch.optim.lr_scheduler.StepLR(torch.optim.SGD(i.parameters(), lr=learning_rate),
                                                               step_size = local_epochs,
@@ -46,7 +51,9 @@ def loss_optimizer(models, learning_rate, gamma, local_epochs, decay=False):
 
 
 def get_models_parameters(models_list):
-    
+    '''
+    Retrieve the parameters of all models in models_list
+    '''
     params = []
     
     for i in models_list:
@@ -62,7 +69,9 @@ def get_models_parameters(models_list):
     
     
 def sum_of_params(models, params):
-    
+    '''
+    new_params contains the list of params, calculated as the sum over all the models
+    '''
     new_params = []
     
     for param_i in range(len(params[0])):
@@ -86,6 +95,9 @@ def sum_of_params(models, params):
     
         
 def calculate_FedREG_params(models, global_params, new_params, c):
+    '''
+    Standard calculation of FedREG
+    '''
     
     with torch.no_grad():
         for i in range(len(global_params)):
@@ -98,6 +110,7 @@ def calculate_FedREG_params(models, global_params, new_params, c):
     
 def calculate_FedREG_params_with_adaption(models, global_params, new_params, current_round, c):
     '''
+    FedREG with distance term.
         global_params:  last aggregated parameters
         new_params:     average of parameters received at this round
         round:          current round of computation 
@@ -118,7 +131,7 @@ def calculate_FedREG_params_with_adaption(models, global_params, new_params, cur
             # first round we don't care about the distance. First iteration
             beta = 1
         else:
-            # If distance = inf, then beta is 0 and the algorithm becomes FedAVG
+            # If distance = inf, then beta is 0 and the algorithm becomes FedAVG (but with constant LR)
             beta = (1 / (1 + distance)) 
         
         
@@ -133,7 +146,9 @@ def calculate_FedREG_params_with_adaption(models, global_params, new_params, cur
     
 
 def calculate_FedAVG_params(models, params):
-    
+    '''
+    Perform the averaging of the parameters
+    '''
     with torch.no_grad():
         new_params = []
 
@@ -160,7 +175,9 @@ def calculate_FedAVG_params(models, params):
 
 
 def set_parameters(new, models):
-    
+    '''
+    set new parameters to the models
+    '''
     with torch.no_grad():
         for remote_index in range(len(models)):
             param_index = 0
@@ -171,9 +188,10 @@ def set_parameters(new, models):
        
 
     
-def trainInBatch(model, criterion, optimizer, inputs, labels, local_epochs, input_len, batch_size=4, decay=False):
-    
-    
+def trainInBatch(model, criterion, optimizer, inputs, labels, local_epochs, input_len, batch_size=8, decay=False):
+    '''
+    Batch training. Decay of LR is required in FedAVG to guarantee convergence when is not used Full Gradient Descent
+    '''
     for epoch in range(local_epochs):
         
         
@@ -192,7 +210,15 @@ def trainInBatch(model, criterion, optimizer, inputs, labels, local_epochs, inpu
             loss.backward()
             optimizer.step()
         
+        
+        
+        
+        
     
+'''
+...Old code...
+'''
+
 
 def train(model, criterion, optimizer, inputs, labels, local_epochs, input_len, batch_size=4, decay=False):
     

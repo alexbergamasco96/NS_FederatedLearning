@@ -26,8 +26,7 @@ from torch.autograd import Variable
 
 
 
-
-
+''' SETTING THE STANDARD SEED '''
 np.random.seed(0)
 torch.manual_seed(0)
 
@@ -37,54 +36,66 @@ torch.manual_seed(0)
 ################
 
 
-#-----Federated Parameters
-num_workers = 4
-num_rounds = 40
 
-dataset_size = 6000    #dataset size
-multifeatures = False
-model_drift = True
+#----- Federated Parameters
+num_workers = 4        # Number of workers
+num_rounds = 40        # Total number of rounds
+
+dataset_size = 6000    # dataset size
+multifeatures = False  # Multi Feature inputs
+model_drift = True     # Drift of the model after [num_rounds/2] rounds
 
 
-learning_rate = 1e-3
-local_epochs = 300
+learning_rate = 1e-3   # LR (same for FedAVG and FedREG)
+local_epochs = 300     # Epochs performed client-side
+batch_size = 8         # Batch_size for local training phase
 
+lr_decay = True        # False (= decay not required) in case of Full Gradient Descent
+
+
+# Parameter not used. Decay is implemented without scheduler, following "On the convergence of FedAVG on Non-IID Data"
 lr_gamma_FedREG = 1
-lr_gamma_FedAVG = 0.8
+lr_gamma_FedAVG = 1
 
-lr_decay = True
+
 
 
 
 
 
 def set_new_seed(x):
-    
+    '''
+    Set the seed for the current computation
+    '''
     np.random.seed(x)
     torch.manual_seed(x)
 
     
 def single_iteration(seed):
     
-    #setting the current seed
+    # setting the current seed
     set_new_seed(seed)
     
-    ### Dataset Creation
     
-    train_list_X, train_list_y, test_X, test_y = synthetic_dataset_creator(dataset_size, num_workers, num_rounds, multi_features=multifeatures, model_drift=model_drift)
+    ### DATASET Creation
     
+    train_list_X, train_list_y, test_X, test_y = synthetic_dataset_creator(dataset_size, 
+                                                                           num_workers, 
+                                                                           num_rounds, 
+                                                                           multi_features=multifeatures, 
+                                                                           model_drift=model_drift)
     
-    w, w_avg = model_creator(   input_size=len(train_list_X[0][0]), 
-                                output_size=len(train_list_y[0][0]), 
-                                num_workers=num_workers,
-                                hidden=64,
-                                model_type='periodic'
-                            )
-
+    # Instantiate all the models with the same weights
+    w, w_avg = model_creator(input_size=len(train_list_X[0][0]), 
+                             output_size=len(train_list_y[0][0]), 
+                             num_workers=num_workers,
+                             hidden=64,
+                             model_type='periodic')
+    
+    # Setting loss and optimizer 
     criterion, optimizers = loss_optimizer(models=w, 
                                            learning_rate=learning_rate, 
                                            gamma=lr_gamma_FedREG, 
-                                           decay=False, 
                                            local_epochs=local_epochs)
     
         
@@ -100,9 +111,11 @@ def single_iteration(seed):
 
     ### OUR ALGORITHM - EXECUTION
     
-    # Parameter 'c' of FedREG algorithm
+    # Parameter 'C' of FedREG algorithm
+    # It defines the relevance of History for the new update
     c = 0
     
+    # Calculating the global parameters for the first execution. A simple Average
     global_params = calculate_FedAVG_params(w, params)
     
     
@@ -110,7 +123,7 @@ def single_iteration(seed):
     for i in range(0, num_rounds):
         
         # Two different test sets, one for each dataset:
-        # before drift and after drift
+        # BEFORE drift and AFTER drift
         
         if model_drift:
             if i < (num_rounds/2):
@@ -131,6 +144,7 @@ def single_iteration(seed):
                     inputs=train_list_X[i*num_workers+j],
                     labels=train_list_y[i*num_workers+j],
                     local_epochs=local_epochs,
+                    batch_size=batch_size,
                     decay=False,
                     input_len=len(train_list_X[i*num_workers+j]))
         
@@ -159,13 +173,16 @@ def single_iteration(seed):
             #predicted = w[0](Variable(torch.from_numpy(current_test_X).float())).data.numpy()
             predicted = w[0](torch.from_numpy(current_test_X).float()).data.numpy()
             
-            
+            # Appending the error and the score
             error.append(mean_squared_error(current_test_y, predicted))
             score.append(r2_score(current_test_y, predicted))
         
+        
+        ''' ---DEBUG--- Current parameter C
         f = open("log_file.txt", "a")
         f.write("PARAMETER C: {}\n".format(c))
         f.close()
+        '''
         
         # Update parameter C
         c = c*beta + len(w)
@@ -182,11 +199,11 @@ def single_iteration(seed):
     
     ### FEDAVG - INITIALIZATION
     
+    # Setting loss and optimizer 
     criterion_avg, optimizers_avg = loss_optimizer(models=w_avg, 
                                                    learning_rate=learning_rate, 
                                                    gamma=lr_gamma_FedAVG, 
-                                                   decay=False, 
-                                                   local_epochs=(local_epochs-10))
+                                                   local_epochs=local_epochs)
     
         
     params = get_models_parameters(w_avg)
@@ -200,10 +217,13 @@ def single_iteration(seed):
     score_fedavg = []
 
     
+    '''
     train_list_X = copy.deepcopy(train_list_X)
     train_list_y = copy.deepcopy(train_list_y)
     test_X = copy.deepcopy(test_X)
     test_y = copy.deepcopy(test_y)
+    '''
+    
     
     ### FEDAVG - EXECUTION
     
@@ -228,12 +248,13 @@ def single_iteration(seed):
                     inputs=train_list_X[i*num_workers+j],
                     labels=train_list_y[i*num_workers+j],
                     local_epochs=local_epochs,
+                    batch_size=batch_size,
                     decay=False,
                     input_len = len(train_list_X[i*num_workers+j]))
             
+            # Learning Rate Decay (needed for convergence): lr_t = (lr0)/(1+t) : t=current_round
             if lr_decay:
                 with torch.no_grad():
-                    # Learning Rate Decay
                     for g in optimizers_avg[j].param_groups:
                         g['lr'] = learning_rate / (1 + (i+1))
 
@@ -255,9 +276,5 @@ def single_iteration(seed):
             error_fedavg.append(mean_squared_error(current_test_y, predicted))
             score_fedavg.append(r2_score(current_test_y, predicted))
         
-        for g in optimizers_avg[j].param_groups:
-            f = open("log_file.txt", "a")
-            f.write("LR {}\n".format(g['lr']))
-            f.close()
     
     return error, score, error_fedavg, score_fedavg
