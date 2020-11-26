@@ -194,9 +194,9 @@ def trainInBatch(model, criterion, optimizer, inputs, labels, local_epochs, inpu
     '''
     for epoch in range(local_epochs):
         
-        
         permutation = torch.randperm(inputs.size()[0])
         
+             
         for i in range(0, inputs.size()[0], batch_size):
             
             optimizer.zero_grad()
@@ -216,7 +216,7 @@ def trainInBatch(model, criterion, optimizer, inputs, labels, local_epochs, inpu
         
     
 '''
-...Old code...
+...Old code... GD for each sample.
 '''
 
 

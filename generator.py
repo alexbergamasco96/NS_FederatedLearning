@@ -118,7 +118,7 @@ def single_iteration(seed):
     # Calculating the global parameters for the first execution. A simple Average
     global_params = calculate_FedAVG_params(w, params)
     
-    
+    torch.manual_seed(seed)
     # EXECUTION
     for i in range(0, num_rounds):
         
@@ -138,8 +138,9 @@ def single_iteration(seed):
             
             
         for j in range(0, num_workers):
+            
             trainInBatch(  model=w[j],
-                    optimizer=optimizers[j],
+                            optimizer=optimizers[j],
                     criterion=criterion[j],
                     inputs=train_list_X[i*num_workers+j],
                     labels=train_list_y[i*num_workers+j],
@@ -194,9 +195,7 @@ def single_iteration(seed):
     ### -----------------------------------------------------------------------
     ### -----------------------------------------------------------------------
     
-    
-
-    
+    set_new_seed(seed)
     ### FEDAVG - INITIALIZATION
     
     # Setting loss and optimizer 
@@ -226,7 +225,7 @@ def single_iteration(seed):
     
     
     ### FEDAVG - EXECUTION
-    
+    torch.manual_seed(seed)
     for i in range(0, num_rounds):
         
         if model_drift:
