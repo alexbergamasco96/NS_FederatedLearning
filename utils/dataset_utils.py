@@ -27,31 +27,29 @@ from torch.autograd import Variable
 
 
 
-#-----Linear Regression Parameters
 
-drifts = 1
-
-## No Drift:
-m = -10.1
-m2 = 1.4
-m3 = -0.5
-c = 1.4
-a = 0.1
-v = 1    #noise variance
+#----- Regression Parameters
 
 
-## After Drift
-mm = -6
-mm2 = 2.2
-mm3 = 0.2
-cc = -3
-aa = 0.15
-vv = 1   #noise variance
+'''
+    The function is defined as:    
+    
+    y = m[0]*sin(X*m[1]*phi)+m[2]
+'''
+m = [10.0, 0.1, 1.5] #before drift
+mm = [6.0, 0.15, 3] #after drift
 
+v = 1 # noise
+
+
+
+
+
+drifts = 2  # different models
 
 range_min = 0    #min value of X
 range_max = 20    #max value of X
-train_percentage = 0.8
+train_percentage = 0.8 #train-test split
 
 
 
@@ -88,7 +86,7 @@ def synthetic_dataset_creator(dataset_size, num_workers, num_rounds, multi_featu
         
         after_drift=False
         
-        for i in range(drifts+1):
+        for i in range(drifts):
             tr_X, tr_y, t_X, t_y = generate_data(int(dataset_size/drifts), 
                                                  num_workers, 
                                                  int(num_rounds/drifts), 
@@ -145,10 +143,10 @@ def generate_data(dataset_size, num_workers, num_rounds, after_drift=False, mult
         
         if after_drift:
             #dataset_y =  dataset_X * mm + cc +  np.random.randn(dataset_X.size) * math.sqrt(v)
-            dataset_y = mm * np.sin(dataset_X*(aa*math.pi)) + cc + np.random.randn(dataset_X.size) * math.sqrt(vv)
+            dataset_y = mm[0] * np.sin(dataset_X*(mm[1]*math.pi)) + mm[2] + np.random.randn(dataset_X.size) * math.sqrt(v)
         else:
             #dataset_y =  dataset_X * m + c +  np.random.randn(dataset_X.size) * math.sqrt(v)
-            dataset_y = m * np.sin(dataset_X*(a*math.pi)) + c + np.random.randn(dataset_X.size) * math.sqrt(v)
+            dataset_y = m[0] * np.sin(dataset_X*(m[1]*math.pi)) + m[2] + np.random.randn(dataset_X.size) * math.sqrt(v)
 
         dataset_X = dataset_X.reshape(-1,1)
         dataset_y = dataset_y.reshape(-1,1)

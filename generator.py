@@ -24,30 +24,24 @@ from collections import defaultdict
 
 from torch.autograd import Variable
 
-
-
-''' SETTING THE STANDARD SEED '''
 np.random.seed(0)
 torch.manual_seed(0)
 
 
 
-################
-################
 
+# ----- Federated Parameters
 
+num_workers = 8        # Number of workers
+num_rounds = 80       # Total number of rounds
 
-#----- Federated Parameters
-num_workers = 4        # Number of workers
-num_rounds = 40        # Total number of rounds
-
-dataset_size = 6000    # dataset size
+dataset_size = 24000    # dataset size
 multifeatures = False  # Multi Feature inputs
 model_drift = True     # Drift of the model after [num_rounds/2] rounds
 
 
 learning_rate = 1e-3   # LR (same for FedAVG and FedREG)
-local_epochs = 300     # Epochs performed client-side
+local_epochs = 200     # Epochs performed client-side
 batch_size = 8         # Batch_size for local training phase
 
 lr_decay = True        # False (= decay not required) in case of Full Gradient Descent
@@ -72,13 +66,20 @@ def set_new_seed(x):
 
     
 def single_iteration(seed):
+    """
+    This method performs an iteration of the algorithm, with the given seed.
+    Main steps:
+        - Create the dataset
+        - Create the models (same initialization)
+        - Set losses and optimizers
+        - FedREG and FedAVG executions
+    """
     
     # setting the current seed
     set_new_seed(seed)
     
     
     ### DATASET Creation
-    
     train_list_X, train_list_y, test_X, test_y = synthetic_dataset_creator(dataset_size, 
                                                                            num_workers, 
                                                                            num_rounds, 
@@ -109,7 +110,7 @@ def single_iteration(seed):
     score = []
 
 
-    ### OUR ALGORITHM - EXECUTION
+    ### --------- FedREG - EXECUTION
     
     # Parameter 'C' of FedREG algorithm
     # It defines the relevance of History for the new update
@@ -119,12 +120,14 @@ def single_iteration(seed):
     global_params = calculate_FedAVG_params(w, params)
     
     torch.manual_seed(seed)
-    # EXECUTION
+    
+    # Execution: num_rounds iterations
     for i in range(0, num_rounds):
         
-        # Two different test sets, one for each dataset:
-        # BEFORE drift and AFTER drift
-        
+        '''
+        Two different test sets, one for each dataset:
+        Before drift and After drift in case of model_drift = True
+        '''
         if model_drift:
             if i < (num_rounds/2):
                 current_test_X = test_X[0]
@@ -133,21 +136,21 @@ def single_iteration(seed):
                 current_test_X = test_X[1]
                 current_test_y = test_y[1]
         else:
-            current_test_X = test_X[0]
-            current_test_y = test_y[0]
-            
+            current_test_X = test_X
+            current_test_y = test_y
+        
             
         for j in range(0, num_workers):
             
-            trainInBatch(  model=w[j],
+            trainInBatch(   model=w[j],
                             optimizer=optimizers[j],
-                    criterion=criterion[j],
-                    inputs=train_list_X[i*num_workers+j],
-                    labels=train_list_y[i*num_workers+j],
-                    local_epochs=local_epochs,
-                    batch_size=batch_size,
-                    decay=False,
-                    input_len=len(train_list_X[i*num_workers+j]))
+                            criterion=criterion[j],
+                            inputs=train_list_X[i*num_workers+j],
+                            labels=train_list_y[i*num_workers+j],
+                            local_epochs=local_epochs,
+                            batch_size=batch_size,
+                            decay=False,
+                            input_len=len(train_list_X[i*num_workers+j]))
         
             
         # Get the params
@@ -160,11 +163,11 @@ def single_iteration(seed):
             new_params = sum_of_params(w, params)
             
             # Calculate the aggregated parameters with our method
-            global_params, beta = calculate_FedREG_params_with_adaption( models=w, 
-                                                                   global_params=global_params, 
-                                                                   new_params=new_params, 
-                                                                   current_round=i,
-                                                                   c=c)
+            global_params, beta = calculate_FedREG_params_with_adaption(   models=w, 
+                                                                           global_params=global_params, 
+                                                                           new_params=new_params, 
+                                                                           current_round=i,
+                                                                           c=c)
             
             # Set new aggregated parameters
             set_parameters(global_params, w)
@@ -216,17 +219,18 @@ def single_iteration(seed):
     score_fedavg = []
 
     
-    '''
+    
     train_list_X = copy.deepcopy(train_list_X)
     train_list_y = copy.deepcopy(train_list_y)
     test_X = copy.deepcopy(test_X)
     test_y = copy.deepcopy(test_y)
-    '''
+    
     
     
     ### FEDAVG - EXECUTION
     torch.manual_seed(seed)
     for i in range(0, num_rounds):
+        
         
         if model_drift:
             if i < (num_rounds/2):
@@ -236,26 +240,27 @@ def single_iteration(seed):
                 current_test_X = test_X[1]
                 current_test_y = test_y[1]
         else:
-            current_test_X = test_X[0]
-            current_test_y = test_y[0]
-            
+            current_test_X = test_X
+            current_test_y = test_y
+        
+       
         
         for j in range(0, num_workers):
-            trainInBatch(  model=w_avg[j],
-                    optimizer=optimizers_avg[j],
-                    criterion=criterion_avg[j],
-                    inputs=train_list_X[i*num_workers+j],
-                    labels=train_list_y[i*num_workers+j],
-                    local_epochs=local_epochs,
-                    batch_size=batch_size,
-                    decay=False,
-                    input_len = len(train_list_X[i*num_workers+j]))
+            trainInBatch(   model=w_avg[j],
+                            optimizer=optimizers_avg[j],
+                            criterion=criterion_avg[j],
+                            inputs=train_list_X[i*num_workers+j],
+                            labels=train_list_y[i*num_workers+j],
+                            local_epochs=local_epochs,
+                            batch_size=batch_size,
+                            decay=False,
+                            input_len = len(train_list_X[i*num_workers+j]))
             
             # Learning Rate Decay (needed for convergence): lr_t = (lr0)/(1+t) : t=current_round
-            if lr_decay:
-                with torch.no_grad():
-                    for g in optimizers_avg[j].param_groups:
-                        g['lr'] = learning_rate / (1 + (i+1))
+            #if lr_decay:
+            #    with torch.no_grad():
+            #        for g in optimizers_avg[j].param_groups:
+            #            g['lr'] = learning_rate / (1 + (i+1))
 
             
         # Get the params
