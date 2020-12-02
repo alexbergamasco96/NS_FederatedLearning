@@ -36,19 +36,29 @@ from torch.autograd import Variable
     
     y = m[0]*sin(X*m[1]*phi)+m[2]
 '''
+
+''' Params for Periodic Function'''
+'''
 m = [10.0, 0.1, 1.5] #before drift
 mm = [6.0, 0.15, -3.0] #after drift
+'''
 
-v = 1 # noise
+''' Params for Linear Function '''
+m = [3.0, 0.5, 1.5, 1.0] #before drift
+mm = [4.0, 1.0, 0.5, 2.5] #after drift
 
 
+
+v = 5 # noise
+
+function_type = 'linear' # 'linear' or 'periodic'
 
 
 
 drifts = 2  # different models
 
 range_min = 0    #min value of X
-range_max = 20    #max value of X
+range_max = 10    #max value of X
 train_percentage = 0.8 #train-test split
 
 
@@ -129,11 +139,16 @@ def generate_data(dataset_size, num_workers, num_rounds, after_drift=False, mult
         
         
         if after_drift:
-            #dataset_y = dataset_X1 * mm + dataset_X2 * mm2 + dataset_X3 * mm3 + cc + np.random.randn(dataset_X1.size) * math.sqrt(v)
-            dataset_y = mm * np.sin(dataset_X1*(aa*math.pi)+ dataset_X2*(aa*math.pi) + dataset_X3*(aa*math.pi)) + np.random.randn(dataset_X1.size) * math.sqrt(vv)
+            if function_type == 'linear':
+                dataset_y = dataset_X1 * mm[0] + dataset_X2 * mm[1] + dataset_X3 * mm[2] + mm[3] + np.random.randn(dataset_X1.size) * math.sqrt(v)
+            else:
+                dataset_y = mm[0] * np.sin(dataset_X1*(mm[1]*math.pi)+ dataset_X2*(mm[2]*math.pi) + dataset_X3*(mm[3]*math.pi)) + mm[4] + np.random.randn(dataset_X1.size) * math.sqrt(v)
+                
         else:
-            #dataset_y = dataset_X1 * m + dataset_X2 * m2 + dataset_X3 * m3 + c + np.random.randn(dataset_X1.size) * math.sqrt(v)
-            dataset_y = m * np.sin(dataset_X1*(a*math.pi)+ dataset_X2*(a*math.pi) + dataset_X3*(a*math.pi)) + np.random.randn(dataset_X1.size) * math.sqrt(v)
+            if function_type == 'linear': 
+                dataset_y = dataset_X1 * m[0] + dataset_X2 * m[1] + dataset_X3 * m[2] + m[3] + np.random.randn(dataset_X1.size) * math.sqrt(v)
+            else:
+                dataset_y = m[0] * np.sin(dataset_X1*(m[1]*math.pi)+ dataset_X2*(m[2]*math.pi) + dataset_X3*(m[3]*math.pi)) +m[4]+ np.random.randn(dataset_X1.size) * math.sqrt(v)
             
         dataset_y = dataset_y.reshape(-1,1)
         dataset_X = dataset_X.transpose()
@@ -144,11 +159,15 @@ def generate_data(dataset_size, num_workers, num_rounds, after_drift=False, mult
         np.random.shuffle(dataset_X)
         
         if after_drift:
-            #dataset_y =  dataset_X * mm + cc +  np.random.randn(dataset_X.size) * math.sqrt(v)
-            dataset_y = mm[0] * np.sin(dataset_X*(mm[1]*math.pi)) + mm[2] + np.random.randn(dataset_X.size) * math.sqrt(v)
+            if function_type == 'linear':
+                dataset_y =  dataset_X * mm[0] + mm[1] +  np.random.randn(dataset_X.size) * math.sqrt(v)
+            else:
+                dataset_y = mm[0] * np.sin(dataset_X*(mm[1]*math.pi)) + mm[2] + np.random.randn(dataset_X.size) * math.sqrt(v)
         else:
-            #dataset_y =  dataset_X * m + c +  np.random.randn(dataset_X.size) * math.sqrt(v)
-            dataset_y = m[0] * np.sin(dataset_X*(m[1]*math.pi)) + m[2] + np.random.randn(dataset_X.size) * math.sqrt(v)
+            if function_type == 'linear':
+                dataset_y =  dataset_X * m[0] + m[1] +  np.random.randn(dataset_X.size) * math.sqrt(v)
+            else:
+                dataset_y = m[0] * np.sin(dataset_X*(m[1]*math.pi)) + m[2] + np.random.randn(dataset_X.size) * math.sqrt(v)
 
         dataset_X = dataset_X.reshape(-1,1)
         dataset_y = dataset_y.reshape(-1,1)

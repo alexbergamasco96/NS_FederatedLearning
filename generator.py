@@ -32,16 +32,16 @@ torch.manual_seed(0)
 
 # ----- Federated Parameters
 
-num_workers = 4        # Number of workers
+num_workers = 16        # Number of workers
 num_rounds = 20       # Total number of rounds
 
-dataset_size = 3000    # dataset size
+dataset_size = 4000    # dataset size
 multifeatures = False  # Multi Feature inputs
 model_drift = False     # Drift of the model after [num_rounds/2] rounds
 
 
 learning_rate = 1e-3   # LR (same for FedAVG and FedREG)
-local_epochs = 600     # Epochs performed client-side
+local_epochs = 300     # Epochs performed client-side
 batch_size = 8         # Batch_size for local training phase
 
 lr_decay = True        # False (= decay not required) in case of Full Gradient Descent
@@ -50,6 +50,8 @@ adaptive_FedREG = False
 # Parameter not used. Decay is implemented without scheduler, following "On the convergence of FedAVG on Non-IID Data"
 lr_gamma_FedREG = 1
 lr_gamma_FedAVG = 1
+
+model_type= 'non_linear' #Type of Neural Network. 'linear', 'non_linear', 'periodic' (optimized for periodic functions)
 
 
 
@@ -91,7 +93,7 @@ def single_iteration(seed):
                              output_size=len(train_list_y[0][0]), 
                              num_workers=num_workers,
                              hidden=64,
-                             model_type='periodic')
+                             model_type=model_type)
     
     # Setting loss and optimizer 
     criterion, optimizers = loss_optimizer(models=w, 
