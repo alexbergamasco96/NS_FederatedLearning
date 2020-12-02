@@ -37,7 +37,7 @@ from torch.autograd import Variable
     y = m[0]*sin(X*m[1]*phi)+m[2]
 '''
 m = [10.0, 0.1, 1.5] #before drift
-mm = [6.0, 0.15, 3] #after drift
+mm = [6.0, 0.15, -3.0] #after drift
 
 v = 1 # noise
 
@@ -101,12 +101,14 @@ def synthetic_dataset_creator(dataset_size, num_workers, num_rounds, multi_featu
             test_y.append(t_y)
             
             after_drift=True
+            
         
     else:
         train_list_X, train_list_y, test_X, test_y = generate_data(dataset_size, 
                                                                    num_workers, 
                                                                    num_rounds, 
                                                                    multi_features)
+        
     
     return train_list_X, train_list_y, test_X, test_y
 

@@ -32,20 +32,20 @@ torch.manual_seed(0)
 
 # ----- Federated Parameters
 
-num_workers = 8        # Number of workers
-num_rounds = 80       # Total number of rounds
+num_workers = 4        # Number of workers
+num_rounds = 20       # Total number of rounds
 
-dataset_size = 24000    # dataset size
+dataset_size = 3000    # dataset size
 multifeatures = False  # Multi Feature inputs
-model_drift = True     # Drift of the model after [num_rounds/2] rounds
+model_drift = False     # Drift of the model after [num_rounds/2] rounds
 
 
 learning_rate = 1e-3   # LR (same for FedAVG and FedREG)
-local_epochs = 200     # Epochs performed client-side
+local_epochs = 600     # Epochs performed client-side
 batch_size = 8         # Batch_size for local training phase
 
 lr_decay = True        # False (= decay not required) in case of Full Gradient Descent
-
+adaptive_FedREG = False
 
 # Parameter not used. Decay is implemented without scheduler, following "On the convergence of FedAVG on Non-IID Data"
 lr_gamma_FedREG = 1
@@ -162,13 +162,24 @@ def single_iteration(seed):
 
             new_params = sum_of_params(w, params)
             
-            # Calculate the aggregated parameters with our method
-            global_params, beta = calculate_FedREG_params_with_adaption(   models=w, 
-                                                                           global_params=global_params, 
-                                                                           new_params=new_params, 
-                                                                           current_round=i,
-                                                                           c=c)
-            
+            if adaptive_FedREG:
+                # Calculate the aggregated parameters with distance metric
+                global_params, beta = calculate_FedREG_params_with_adaption(   models=w, 
+                                                                               global_params=global_params, 
+                                                                               new_params=new_params, 
+                                                                               current_round=i,
+                                                                               c=c)
+                # Update parameter C
+                c = c*beta + len(w)
+            else:
+                # Calculate the aggregated parameters with our method
+                global_params = calculate_FedREG_params(   models=w, 
+                                                           global_params=global_params, 
+                                                           new_params=new_params,
+                                                           c=c)
+                # Update parameter C
+                c = c + len(w)
+                
             # Set new aggregated parameters
             set_parameters(global_params, w)
         
@@ -188,8 +199,7 @@ def single_iteration(seed):
         f.close()
         '''
         
-        # Update parameter C
-        c = c*beta + len(w)
+        
         
 
         
@@ -257,10 +267,10 @@ def single_iteration(seed):
                             input_len = len(train_list_X[i*num_workers+j]))
             
             # Learning Rate Decay (needed for convergence): lr_t = (lr0)/(1+t) : t=current_round
-            #if lr_decay:
-            #    with torch.no_grad():
-            #        for g in optimizers_avg[j].param_groups:
-            #            g['lr'] = learning_rate / (1 + (i+1))
+            if lr_decay:
+                with torch.no_grad():
+                    for g in optimizers_avg[j].param_groups:
+                        g['lr'] = learning_rate / (1 + (i+1))
 
             
         # Get the params
