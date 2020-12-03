@@ -121,10 +121,10 @@ def calculate_FedREG_params_with_adaption(models, global_params, new_params, cur
         # calculating the distance from the new parameters
         distance = 0
         for i in range(len(global_params)):
-            distance += torch.norm((global_params[i] - new_params[i])/ global_params[i]) / len(global_params[i].view(-1,1))
+            distance += torch.norm((global_params[i] - new_params[i]/len(models)))
         
         # distance is divided by the len of params
-        distance /= len(global_params)
+        #distance /= len(global_params)
 
         # setting beta: parameter that express the distance 
         if current_round == 0:

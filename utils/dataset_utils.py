@@ -38,27 +38,28 @@ from torch.autograd import Variable
 '''
 
 ''' Params for Periodic Function'''
-'''
+
 m = [10.0, 0.1, 1.5] #before drift
 mm = [6.0, 0.15, -3.0] #after drift
-'''
+
 
 ''' Params for Linear Function '''
+'''
 m = [3.0, 0.5, 1.5, 1.0] #before drift
 mm = [4.0, 1.0, 0.5, 2.5] #after drift
+'''
 
 
+v = 0.5 # noise
 
-v = 5 # noise
-
-function_type = 'linear' # 'linear' or 'periodic'
+function_type = 'periodic' # 'linear' or 'periodic'
 
 
 
 drifts = 2  # different models
 
 range_min = 0    #min value of X
-range_max = 10    #max value of X
+range_max = 20    #max value of X
 train_percentage = 0.8 #train-test split
 
 
