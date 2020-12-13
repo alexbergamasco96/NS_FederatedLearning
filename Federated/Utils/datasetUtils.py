@@ -12,10 +12,6 @@ import torch.nn.functional as F
 import os
 import numpy as np
 import math
-from Stationary.core import *
-from utils.dataset_utils import *
-from model.model_creation import *
-from model.model_train import *
 from sklearn import linear_model, datasets
 from sklearn.metrics import mean_squared_error, r2_score
 import matplotlib.pyplot as plt
@@ -54,7 +50,7 @@ function_type = 'periodic' # 'linear' or 'periodic'
 
 
 
-drifts = 2  # different models
+drifts = 1  # different models
 
 range_min = 0    #min value of X
 range_max = 20    #max value of X
@@ -107,7 +103,7 @@ def synthetic_dataset_creator(dataset_size, num_workers, num_rounds, multi_featu
         
         after_drift=False
         
-        for i in range(drifts+1):
+        for i in range(settings.drifts+1):
             tr_X, tr_y, t_X, t_y = generate_data(int(dataset_size/(settings.drifts+1)), 
                                                  num_workers, 
                                                  int(num_rounds/(settings.drifts+1)), 

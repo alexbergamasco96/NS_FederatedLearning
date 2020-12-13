@@ -12,8 +12,6 @@ import torch.nn.functional as F
 import os
 import numpy as np
 import math
-from Stationary.core import *
-from Stationary.utils import *
 from sklearn import linear_model, datasets
 from sklearn.metrics import mean_squared_error, r2_score
 import matplotlib.pyplot as plt
@@ -72,7 +70,7 @@ class nonLinearModel(torch.nn.Module):
         return x
     
 
-def createModel(input_size, output_size, initialLR, hidden=64, model_type='periodic'):
+def createModel(input_size, output_size, initialLR, hidden=64, model_type='periodic', optimizer='SGD'):
     
     if model_type == 'linear':
         model = linearModel(input_size, output_size, H=hidden)
@@ -81,7 +79,7 @@ def createModel(input_size, output_size, initialLR, hidden=64, model_type='perio
     else:
         model = periodicModel(input_size, output_size, H=hidden)
     
-    criterion, optimizer = setLossOptimizer(model, initialLR)
+    criterion, optimizer = setLossOptimizer(model, initialLR, optimizer)
     return model, criterion, optimizer
 
 '''

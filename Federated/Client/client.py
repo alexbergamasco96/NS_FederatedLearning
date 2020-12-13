@@ -12,8 +12,6 @@ import torch.nn.functional as F
 import os
 import numpy as np
 import math
-from Stationary.core import *
-from Stationary.utils import *
 from sklearn import linear_model, datasets
 from sklearn.metrics import mean_squared_error, r2_score
 import matplotlib.pyplot as plt
@@ -28,15 +26,17 @@ from Federated.Server.modelFunctional import *
 
 class Client():
     
-    def __init__(self, initialLR, model_type):
+    def __init__(self, initialLR, model_type, optimizer='SGD'):
         self.current_round = 0
         self.model_type = model_type
         self.initialLR = initialLR
+        self.optimizer_type = optimizer
         self.model, self.criterion, self.optimizer = createModel(input_size=1,
                                                                  output_size=1, 
                                                                  initialLR=initialLR,
                                                                  hidden=64,
-                                                                 model_type=self.model_type)
+                                                                 model_type=self.model_type,
+                                                                 optimizer=optimizer)
         
     
     
@@ -94,6 +94,8 @@ class Client():
     def decayLR(self):
         with torch.no_grad():
             for g in self.optimizer.param_groups:
-                g['lr'] = self.initialLR / (1+self.current_round)
-    
+                if self.optimizer_type == 'SGD':
+                    g['lr'] = self.initialLR / (1+self.current_round)
+                else:
+                    g['lr'] = self.initialLR / (1 + math.sqrt(self.current_round))
     

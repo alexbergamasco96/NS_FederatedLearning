@@ -13,8 +13,6 @@ import torch.nn.functional as F
 import os
 import numpy as np
 import math
-from Stationary.core import *
-from Stationary.utils import *
 from sklearn import linear_model, datasets
 from sklearn.metrics import mean_squared_error, r2_score
 import matplotlib.pyplot as plt
@@ -26,9 +24,16 @@ from torch.autograd import Variable
 
 
 
-def setLossOptimizer(model, learning_rate):        
+def setLossOptimizer(model, learning_rate, optimizer):        
     criterion = torch.nn.MSELoss()
-    optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)    
+    
+    if optimizer == 'SGD':
+        optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
+    elif optimizer == 'Adam':
+        optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    else:
+        optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)   
+        
     return criterion, optimizer
 
 

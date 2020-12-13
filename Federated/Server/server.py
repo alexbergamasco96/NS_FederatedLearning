@@ -28,7 +28,7 @@ from Federated.Utils import settings
 
 class Server():
     
-    def __init__(self, num_workers, model_type, aggregation_method):
+    def __init__(self, num_workers, model_type, aggregation_method, optimizer='SGD', LRdecay=True):
         
         self.num_workers = num_workers
         self.model_type = model_type
@@ -37,20 +37,21 @@ class Server():
                                                                  output_size=1, 
                                                                  initialLR=settings.initialLR,
                                                                  hidden=settings.hiddenNeurons,
-                                                                 model_type=self.model_type)
-        self.clients = self.generateWorkers(self.num_workers, self.model_type, initialLR=settings.initialLR)
+                                                                 model_type=self.model_type,
+                                                                 optimizer=optimizer)
+        self.clients = self.generateWorkers(self.num_workers, self.model_type, optimizer=optimizer, initialLR=settings.initialLR)
         self.current_round = 0
-        self.LRdecay = settings.LRdecay
+        self.LRdecay = LRdecay#settings.LRdecay
         
         
         
         
         
-    def generateWorkers(self, num_workers, model_type, initialLR):
+    def generateWorkers(self, num_workers, model_type, optimizer, initialLR):
         
         client_list = []
         for i in range(num_workers):
-            client_list.append(Client(initialLR, model_type=self.model_type))
+            client_list.append(Client(initialLR, optimizer=optimizer, model_type=self.model_type))
         
         return client_list
     
@@ -156,6 +157,7 @@ class Server():
             error, score = self.test()
             error_list.append(error)
             score_list.append(score)
+            self.current_round += 1
         return error_list, score_list    
     
     
@@ -164,7 +166,7 @@ class Server():
         for i in self.clients:
             i.train(current_round=self.current_round, local_epochs=200)
             
-        self.current_round += 1
+        #self.current_round += 1
         
     
     def test(self):

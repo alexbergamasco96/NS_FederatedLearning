@@ -9,12 +9,12 @@ Created on Wed Dec  9 16:08:30 2020
 
 # ----- Federated Parameters
 
-num_workers = 4        # Number of workers
+num_workers = 8        # Number of workers
 num_rounds = 40       # Total number of rounds
 
-dataset_size = 8000    # dataset size
+dataset_size = 12000    # dataset size
 multi_features = False  # Multi Feature inputs
-model_drift = False     # Drift of the model after [num_rounds/2] rounds
+model_drift = True     # Drift of the model after [num_rounds/2] rounds
 
 
 learning_rate = 1e-3   # LR (same for FedAVG and FedREG)
@@ -35,10 +35,6 @@ hiddenNeurons = 64
 
 input_size = 3 if multi_features else 1
 output_size = 1
-
-model_drift = False
-
-
 
 
 
@@ -66,7 +62,7 @@ mm = [4.0, 1.0, 0.5, 2.5] #after drift
 '''
 
 
-v = 0.5 # noise
+v = 1.5 # noise
 
 function_type = 'periodic' # 'linear' or 'periodic'
 
