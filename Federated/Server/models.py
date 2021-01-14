@@ -153,11 +153,11 @@ def createModel(input_size, output_size, initialLR, hidden=64, model_type='perio
     elif model_type == 'non_linear':
         model = nonLinearModel(input_size, output_size, H=hidden)
     elif model_type == 'MNISTFFNN':
-        model = mnistFFNN().cuda()
+        model = mnistFFNN()
     elif model_type == 'MNISTCNN':
-        model = mnistCNN().cuda()
+        model = mnistCNN()
     elif model_type == 'CIFARCNN':
-        model = cifarCNN().cuda()
+        model = cifarCNN()
     else:
         model = periodicModel(input_size, output_size, H=hidden)
     

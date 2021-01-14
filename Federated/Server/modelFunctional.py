@@ -124,7 +124,7 @@ def calculateFedAVGParams(num_clients, params):
             for remote_index in range(num_clients):
                 spdz_params.append(params[remote_index][param_i])
 
-            spdz = torch.tensor([0.0]).cuda().float()
+            spdz = torch.tensor([0.0]).float()
 
             for k in spdz_params:
                 spdz = spdz + k

@@ -455,7 +455,7 @@ class Server():
         correct = 0
         with torch.no_grad():
             for data, target in self.test_loader:
-                data, target = Variable(data).cuda(), Variable(target).cuda()
+                data, target = Variable(data), Variable(target)
                 output = self.model(data)
                 test_loss += F.nll_loss(output, target, reduction='sum').item()  # sum up batch loss
                 pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
@@ -473,7 +473,7 @@ class Server():
         correct = 0
         with torch.no_grad():
             for data, target in self.test_loader:
-                data, target = Variable(data).cuda(), Variable(target).cuda()
+                data, target = Variable(data), Variable(target)
                 output = self.model(data)
                 test_loss += self.criterion(output, target).item()
                 pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
