@@ -169,7 +169,7 @@ def generate_data(dataset_size, num_workers, num_rounds, after_drift=False, mult
             if settings.function_type == 'linear':
                 dataset_y =  dataset_X * settings.mm[0] + settings.mm[1] +  np.random.randn(dataset_X.size) * math.sqrt(settings.v)
             else:
-                dataset_y = settings.mm[0] * np.sin(dataset_X*(settings.mm[1]*math.pi)) + settings.mm[2] + np.random.randn(dataset_X.size) * math.sqrt(settings.v)
+                dataset_y = settings.mm[0] * np.cos(dataset_X*(settings.mm[1]*math.pi)) + settings.mm[2] + np.random.randn(dataset_X.size) * math.sqrt(settings.v)
         else:
             if settings.function_type == 'linear':
                 dataset_y =  dataset_X * settings.m[0] + settings.m[1] +  np.random.randn(dataset_X.size) * math.sqrt(settings.v)
@@ -201,3 +201,37 @@ def generate_data(dataset_size, num_workers, num_rounds, after_drift=False, mult
     
     
     return train_list_X, train_list_y, test_X, test_y
+
+
+def trainFiltering(dataset, remove_list, num_clients):
+    '''
+        - Remove data with target in remove_list
+        - Select the correct subset of dataset in order to perform splitting among all clients
+    '''
+    for elem in remove_list:
+        idx = dataset.targets != elem
+        dataset.targets = dataset.targets[idx]
+        dataset.data = dataset.data[idx]
+    
+    len_train_dataset = int(dataset.data.shape[0] / num_clients) * num_clients
+    
+    dataset.data = dataset.data[:len_train_dataset]
+    dataset.targets = dataset.targets[:len_train_dataset]
+    
+    return dataset
+
+
+def testFiltering(dataset, remove_list, len_dataset):
+    '''
+        - Remove data with target in remove_list
+        - Set the dimension of the test dataset
+    '''
+    for elem in remove_list:
+        idx = dataset.targets != elem
+        dataset.targets = dataset.targets[idx]
+        dataset.data = dataset.data[idx]
+    
+    dataset.data = dataset.data[:len_dataset]
+    dataset.targets = dataset.targets[:len_dataset]
+    
+    return dataset

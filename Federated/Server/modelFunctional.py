@@ -13,7 +13,7 @@ import torch.nn.functional as F
 import os
 import numpy as np
 import math
-from sklearn import linear_model, datasets
+from sklearn import linear_model
 from sklearn.metrics import mean_squared_error, r2_score
 import matplotlib.pyplot as plt
 import torch.nn.functional as F
@@ -25,7 +25,9 @@ from torch.autograd import Variable
 
 
 def setLossOptimizer(model, learning_rate, optimizer):        
-    criterion = torch.nn.MSELoss()
+    
+    #criterion = torch.nn.MSELoss()
+    criterion = nn.criterion = nn.CrossEntropyLoss(reduction='sum')
     
     if optimizer == 'SGD':
         optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
@@ -122,7 +124,7 @@ def calculateFedAVGParams(num_clients, params):
             for remote_index in range(num_clients):
                 spdz_params.append(params[remote_index][param_i])
 
-            spdz = torch.tensor([0.0]).float()
+            spdz = torch.tensor([0.0]).cuda().float()
 
             for k in spdz_params:
                 spdz = spdz + k

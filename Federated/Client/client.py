@@ -68,6 +68,7 @@ class Client():
     # SISTEMA
     def train(self, current_round, local_epochs=200, batch_size=8):
         
+        self.model.train()
         for epoch in range(local_epochs):
         
             permutation = torch.randperm(self.train_list_X[current_round].size()[0])
@@ -91,11 +92,50 @@ class Client():
         self.current_round += 1
         
         
-    def decayLR(self):
+        
+    def trainMNIST(self, current_round, local_epochs=5):
+        
+        self.model.train()
+        for epoch in range(local_epochs):
+        
+            for batch_idx, (data, target) in enumerate(self.train_loader):
+                data, target = Variable(data).cuda(), Variable(target).cuda()
+                self.optimizer.zero_grad()
+                output = self.model(data)
+                loss = F.nll_loss(output, target)
+                loss.backward()
+                self.optimizer.step()
+        
+        self.current_round += 1
+        
+        
+    def trainCIFAR(self, current_round, local_epochs=5):
+        
+        self.model.train()
+        for epoch in range(local_epochs):
+        
+            for batch_idx, (data, target) in enumerate(self.train_loader):
+                data, target = Variable(data).cuda(), Variable(target).cuda()
+                self.optimizer.zero_grad()
+                output = self.model(data)
+                loss = self.criterion(output, target)
+                loss.backward()
+                self.optimizer.step()
+        
+        self.current_round += 1
+    
+    
+        
+    def decayLR(self, coeff=1):
         with torch.no_grad():
             for g in self.optimizer.param_groups:
                 if self.optimizer_type == 'SGD':
-                    g['lr'] = self.initialLR / (1+self.current_round)
+                    g['lr'] = ((self.initialLR)*(coeff)) / (1+self.current_round)
                 else:
                     g['lr'] = self.initialLR / (1 + math.sqrt(self.current_round))
+                    
+    def setLR(self, coeff):
+        with torch.no_grad():
+            for g in self.optimizer.param_groups:
+                g['lr'] = coeff
     

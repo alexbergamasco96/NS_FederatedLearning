@@ -12,12 +12,27 @@ import torch.nn.functional as F
 import os
 import numpy as np
 import math
-from sklearn import linear_model, datasets
 from sklearn.metrics import mean_squared_error, r2_score
 import matplotlib.pyplot as plt
 import torch.nn.functional as F
 import copy
 from torch.autograd import Variable
+
+import os
+import random
+from tqdm import tqdm
+import numpy as np
+import torch, torchvision
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+from torchvision import datasets, transforms
+from torch.utils.data.dataset import Dataset   
+torch.backends.cudnn.benchmark=True
+
+from torch.autograd import Variable
+
+
 
 from Federated.Client.client import *
 from Federated.Utils.datasetUtils import *
@@ -41,10 +56,29 @@ class Server():
                                                                  optimizer=optimizer)
         self.clients = self.generateWorkers(self.num_workers, self.model_type, optimizer=optimizer, initialLR=settings.initialLR)
         self.current_round = 0
-        self.LRdecay = LRdecay#settings.LRdecay
+        self.LRdecay = settings.LRdecay
+        self.mean = self.initializeMean()
+        self.previous_mean = copy.deepcopy(self.mean)
+        self.variance = 0
+        self.previous_variance = 0
+        self.LRcoeff = 0
+        self.c = 0
         
         
+    
+    def initializeMean(self):
+        '''
+            Initialize the mean vector of parameters to 0
+        '''
+        with torch.no_grad():
+            a = np.array([])
+            for i in self.model.parameters():
+                for j in i:
+                    a = np.append(a, j.clone().cpu())
+            a = np.zeros(len(a))
         
+        return a
+                
         
         
     def generateWorkers(self, num_workers, model_type, optimizer, initialLR):
@@ -56,8 +90,18 @@ class Server():
         return client_list
     
     
-    
+    '''
     def generateDataset(self, dataset_size, num_rounds, multi_features=False, model_drift=False):
+        
+        if self.model_type == 'MNIST':
+            ###
+        elif self.model_type == 'CIFAR':
+            ###
+        else: #synthetic
+            self.generateSyntheticDataset(self, dataset_size, num_rounds, multi_features=False, model_drift=False)
+    '''
+    
+    def generateSyntheticDataset(self, dataset_size, num_rounds, multi_features=False, model_drift=False):
         
         self.initializeComputation(num_rounds)
         self.datasetGenerator = DatasetGenerator(num_workers=self.num_workers, num_rounds=num_rounds)
@@ -75,6 +119,108 @@ class Server():
         
         self.current_round = 0
         self.c = 0
+    
+    
+    
+    def generateMNISTDataset(self, num_rounds):
+        
+        self.num_rounds = num_rounds
+        
+        # Image augmentation 
+        transform_train = transforms.Compose([
+                                           torchvision.transforms.ToTensor(),
+                                           torchvision.transforms.Normalize((0.1307,), (0.3081,))]
+                                       )
+        
+        # Loading MNIST using torchvision.datasets
+        traindata = torchvision.datasets.MNIST('./data', train=True, download=True,
+                               transform= transform_train)
+        
+        
+        if self.current_round < (self.num_rounds/2) :
+            remove_list = settings.remove_list
+        else:
+            remove_list = []
+            
+        traindata = trainFiltering(traindata, remove_list, self.num_workers)
+        
+        # Dividing the training data into num_clients, with each client having equal number of images
+        traindata_split = torch.utils.data.random_split(traindata, [int(traindata.data.shape[0] / self.num_workers) for _ in range(self.num_workers)])
+        
+        # Creating a pytorch loader for a Deep Learning model
+        train_loader = [torch.utils.data.DataLoader(x, batch_size=settings.batch_size, shuffle=True) for x in traindata_split]
+        
+        
+        
+        testdata = torchvision.datasets.MNIST('./data', train=False, transform=transforms.Compose([
+                                           torchvision.transforms.ToTensor(),
+                                           torchvision.transforms.Normalize((0.1307,), (0.3081,))]
+                                       ))
+        
+        
+        len_test_dataset = int(len(traindata) / 3)
+        testdata = testFiltering(testdata, remove_list, len_test_dataset)
+        
+        # Loading the test iamges and thus converting them into a test_loader
+        self.test_loader = torch.utils.data.DataLoader( testdata, batch_size=settings.batch_size, shuffle=True)
+        
+        for i in range(len(train_loader)):
+            self.clients[i].train_loader = train_loader[i]
+            
+    
+    def generateCIFARDataset(self, num_rounds):
+        
+        self.num_rounds = num_rounds
+        
+        # Image transformation (No Augmentation)
+        transform_train = transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+        ])
+        
+        # Loading CIFAR10 using torchvision.datasets
+        traindata = torchvision.datasets.CIFAR10('./data', train=True, download=True,
+                               transform= transform_train)
+        
+        
+        if self.current_round < (self.num_rounds/2) :
+            remove_list = settings.remove_list
+        else:
+            remove_list = []
+            
+        
+        traindata.targets = torch.LongTensor(traindata.targets)
+        traindata = trainFiltering(traindata, remove_list, self.num_workers)
+        
+        # Dividing the training data into num_clients, with each client having equal number of images
+        traindata_split = torch.utils.data.random_split(traindata, [int(traindata.data.shape[0] / self.num_workers) for _ in range(self.num_workers)])
+        
+        # Creating a pytorch loader for a Deep Learning model
+        train_loader = [torch.utils.data.DataLoader(x, batch_size=settings.batch_size, shuffle=True) for x in traindata_split]
+        
+        
+        # Importing test data
+        testdata = torchvision.datasets.CIFAR10('./data', train=False, transform=transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+                ]))
+        
+        # Changing type of data.target (in CIFAR10 is a list, not a tensor)
+        testdata.targets = torch.LongTensor(testdata.targets)
+            
+        len_test_dataset = int(len(traindata) / 3)
+        testdata = testFiltering(testdata, remove_list, len_test_dataset)
+        
+        # Converting images into a test_loader
+        self.test_loader = torch.utils.data.DataLoader( testdata, batch_size=settings.batch_size, shuffle=True)
+        
+        # setting the train_loaders client-side
+        for i in range(len(train_loader)):
+            self.clients[i].train_loader = train_loader[i]
+            
+        
+        
+        
     
     def initializeComputation(self, num_rounds):
         self.num_rounds = num_rounds
@@ -100,8 +246,7 @@ class Server():
             for p in self.model.parameters():
                 p.data = newParameters[param_index].data.detach().clone()
                 param_index += 1
-    
-    
+        
     
     def aggregate(self):
         
@@ -109,9 +254,19 @@ class Server():
             newParameters = self.aggregateWithHistory()
         elif self.aggregation_method == 'FedREG_Distance': #Adaptive FedREG
             newParameters = self.aggregateWithDistance()
+        elif self.aggregation_method == 'FedAda':
+            newParameters = self.averageParameters()
+            self.adaptiveLR(newParameters)
         else: #FedAVG
             newParameters = self.averageParameters()
             self.lrdecay()
+            '''
+            f = open("log.txt", "a")
+            for g in self.clients[0].optimizer.param_groups:
+                f.write("---Round {}\t".format(self.current_round))
+                f.write("LR: {:.6f}\t".format(g['lr']))
+            f.close()
+            '''
         
         self.setCurrentParameters(newParameters)
         
@@ -124,6 +279,53 @@ class Server():
         newParameters = calculateFedAVGParams(self.num_workers, params)    
         
         return newParameters
+    
+    
+    
+    def adaptiveLR(self, newParameters):
+        
+        # Create the array containing newParameters
+        newParameters_arr = np.array([])
+        for i in newParameters:
+            for j in i:
+                newParameters_arr = np.append(newParameters_arr, j.clone().cpu().data.numpy())
+                
+        # EMA on the mean
+        self.mean = self.previous_mean * settings.beta1 + (1-settings.beta1)*newParameters_arr
+        self.previous_mean = copy.deepcopy(self.mean)
+        # Initialization Bias correction
+        self.mean = self.mean / (1-pow(settings.beta1, self.current_round+1))
+        
+        
+        # EMA on the Variance
+        self.variance = self.previous_variance * settings.beta2 + (1 - settings.beta2)*np.mean((newParameters_arr-self.mean)*(newParameters_arr-self.mean))
+        temp = copy.deepcopy(self.previous_variance)
+        self.previous_variance = copy.deepcopy(self.variance)
+        # Initialization Bias correction
+        self.variance = self.variance / (1-pow(settings.beta2, self.current_round+1))
+        
+        if self.current_round < 2:
+            r = 1
+        else:
+            r = np.abs(self.variance / (temp/(1-pow(settings.beta2, self.current_round))))
+        
+        self.LRcoeff = self.LRcoeff * settings.beta3 + (1-settings.beta3)*r
+        
+        coeff = self.LRcoeff/ (1-pow(settings.beta3,self.current_round +1))
+        
+        coeff = min(settings.initialLR, (settings.initialLR*coeff)/(self.current_round+1))
+        
+        '''
+        f = open("log.txt", "a")
+        f.write("---Round {}\t".format(self.current_round))
+        f.write("Var_Ratio: {:.3f}\t".format(r))
+        f.write("Coeff: {:.6f}\n".format(coeff))
+        f.close()
+        '''
+        for i in self.clients:
+            #i.decayLR(coeff)
+            i.setLR(coeff)
+        
         
     
     def aggregateWithHistory(self):
@@ -160,16 +362,73 @@ class Server():
             self.current_round += 1
         return error_list, score_list    
     
+    def fullTrainingMNIST(self):
+        
+        error_list = []
+        score_list = []
+        
+        for i in range(self.current_round, self.num_rounds):
+            self.generateMNISTDataset(settings.num_rounds)
+            self.trainMNIST()
+            self.aggregate()
+            error, score = self.testMNIST()
+            error_list.append(error)
+            score_list.append(score)
+            self.current_round += 1
+            
+            
+            f = open("log.txt", "a")
+            f.write("---Round {}\t".format(self.current_round))
+            f.write("Score: {:.3f}\n".format(score))
+            f.close()
+            
+            
+        return error_list, score_list
+    
+    def fullTrainingCIFAR(self):
+        
+        error_list = []
+        score_list = []
+        
+        for i in range(self.current_round, self.num_rounds):
+            self.generateCIFARDataset(settings.num_rounds)
+            self.trainCIFAR()
+            self.aggregate()
+            error, score = self.testCIFAR()
+            error_list.append(error)
+            score_list.append(score)
+            self.current_round += 1
+            
+            
+            f = open("log.txt", "a")
+            f.write("---Round {}\t".format(self.current_round))
+            f.write("Score: {:.3f}\n".format(score))
+            f.close()
+            
+            
+        return error_list, score_list 
+    
+    def trainMNIST(self):
+        self.sendParams()
+        for i in self.clients:
+            i.trainMNIST(current_round=self.current_round, local_epochs=5)
+            
+    def trainCIFAR(self):
+        self.sendParams()
+        for i in self.clients:
+            i.trainCIFAR(current_round=self.current_round, local_epochs=5)
     
     def train(self):
         self.sendParams()
         for i in self.clients:
-            i.train(current_round=self.current_round, local_epochs=200)
+            i.train(current_round=self.current_round, local_epochs=settings.local_epochs)
             
         #self.current_round += 1
         
     
     def test(self):
+        
+        self.model.eval()
         
         if self.datasetGenerator.model_drift:
             if self.current_round < (self.datasetGenerator.num_rounds/2):
@@ -188,6 +447,44 @@ class Server():
             score = (r2_score(current_test_y, predicted))
         
         return error, score
+    
+    
+    def testMNIST(self):
+        self.model.eval()
+        test_loss = 0
+        correct = 0
+        with torch.no_grad():
+            for data, target in self.test_loader:
+                data, target = Variable(data).cuda(), Variable(target).cuda()
+                output = self.model(data)
+                test_loss += F.nll_loss(output, target, reduction='sum').item()  # sum up batch loss
+                pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
+                correct += pred.eq(target.view_as(pred)).sum().item()
+    
+        test_loss /= len(self.test_loader.dataset)
+        acc = correct / len(self.test_loader.dataset)
+        
+        
+        return test_loss, acc
+    
+    def testCIFAR(self):
+        self.model.eval()
+        test_loss = 0
+        correct = 0
+        with torch.no_grad():
+            for data, target in self.test_loader:
+                data, target = Variable(data).cuda(), Variable(target).cuda()
+                output = self.model(data)
+                test_loss += self.criterion(output, target).item()
+                pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
+                correct += pred.eq(target.view_as(pred)).sum().item()
+    
+        test_loss /= len(self.test_loader.dataset)
+        acc = correct / len(self.test_loader.dataset)
+        
+        
+        return test_loss, acc
+    
     
     
     def lrdecay(self):

@@ -25,59 +25,35 @@ def set_new_seed(x):
     
 def comparison(seed):
     
+    model_type = 'MNISTCNN'
+    
+    # --- FedAdapt
+    set_new_seed(seed)
+    
+    server_fedadapt = Server(num_workers=settings.num_workers, 
+                           model_type=model_type, 
+                           aggregation_method='FedAda',
+                           optimizer='SGD',
+                           LRdecay=True)
+    
+    server_fedadapt.generateMNISTDataset(num_rounds=settings.num_rounds)
+    
+    error_list_fedadapt, score_list_fedadapt = server_fedadapt.fullTrainingMNIST()
+    
+    
     
     
     # --- FedAVG
     set_new_seed(seed)
     
     server_fedavg = Server(num_workers=settings.num_workers, 
-                           model_type=settings.model_type, 
+                           model_type=model_type, 
                            aggregation_method='FedAVG',
                            optimizer='SGD',
                            LRdecay=True)
     
-    server_fedavg.generateDataset(dataset_size=settings.dataset_size, 
-                                  num_rounds=settings.num_rounds, 
-                                  multi_features=settings.multi_features, 
-                                  model_drift=settings.model_drift)
+    server_fedavg.generateMNISTDataset(num_rounds=settings.num_rounds)
     
-    error_list_fedavg, score_list_fedavg = server_fedavg.fullTraining()
+    error_list_fedavg, score_list_fedavg = server_fedavg.fullTrainingMNIST()
     
-    
-    
-    
-    # --- FedREG
-    set_new_seed(seed)
-    
-    server_fedreg = Server(num_workers=settings.num_workers, 
-                           model_type=settings.model_type, 
-                           aggregation_method='FedAVG',
-                           optimizer='Adam',
-                           LRdecay=True)
-    
-    server_fedreg.generateDataset(dataset_size=settings.dataset_size, 
-                                  num_rounds=settings.num_rounds, 
-                                  multi_features=settings.multi_features, 
-                                  model_drift=settings.model_drift)
-    
-    error_list_fedreg, score_list_fedreg = server_fedreg.fullTraining()
-    
-    
-    '''
-    
-    # --- FedREG_Distance
-    set_new_seed(seed)
-    
-    server_fedreg_distance = Server(num_workers=settings.num_workers, 
-                                    model_type=settings.model_type, 
-                                    aggregation_method='FedREG_Distance')
-    
-    server_fedreg_distance.generateDataset(dataset_size=settings.dataset_size, 
-                                           num_rounds=settings.num_rounds, 
-                                           multi_features=settings.multi_features, 
-                                           model_drift=settings.model_drift)
-    
-    error_list_fedreg_distance, score_list_fedreg_distance = server_fedreg_distance.fullTraining()
-    
-    '''
-    return error_list_fedavg, score_list_fedavg, error_list_fedreg, score_list_fedreg#, error_list_fedreg_distance, score_list_fedreg_distance
+    return error_list_fedadapt, score_list_fedadapt, error_list_fedavg, score_list_fedavg 
