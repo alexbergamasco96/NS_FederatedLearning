@@ -10,7 +10,7 @@ Created on Wed Dec  9 16:08:30 2020
 # ----- Federated Parameters
 
 num_workers = 32        # Number of workers
-num_rounds = 100       # Total number of rounds
+num_rounds = 40       # Total number of rounds
 
 dataset_size = 24000    # dataset size
 multi_features = False  # Multi Feature inputs
@@ -19,13 +19,13 @@ model_drift = True     # Drift of the model after [num_rounds/2] rounds
 initialLR = 1e-2
 #learning_rate = 1e-2   # LR (same for FedAVG and FedREG)
 local_epochs = 5     # Epochs performed client-side
-batch_size = 8         # Batch_size for local training phase
+batch_size = 32         # Batch_size for local training phase
 
 LRdecay = True        # False (= decay not required) in case of Full Gradient Descent
 adaptive_FedREG = False
 
 
-model_type= 'MNIST' #Type of Neural Network. 'linear', 'non_linear', 'periodic' (optimized for periodic functions)
+model_type= 'MNISTFFNN' #Type of Neural Network. 'linear', 'non_linear', 'periodic' (optimized for periodic functions)
 
 
 

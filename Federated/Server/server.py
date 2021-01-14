@@ -374,13 +374,13 @@ class Server():
             error, score = self.testMNIST()
             error_list.append(error)
             score_list.append(score)
-            self.current_round += 1
-            
             
             f = open("log.txt", "a")
             f.write("---Round {}\t".format(self.current_round))
             f.write("Score: {:.3f}\n".format(score))
             f.close()
+            
+            self.current_round += 1
             
             
         return error_list, score_list

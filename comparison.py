@@ -24,8 +24,8 @@ def set_new_seed(x):
     
     
 def comparison(seed):
-    
-    model_type = 'MNISTCNN'
+    torch.set_num_threads(2)
+    model_type = 'MNISTFFNN'
     
     # --- FedAdapt
     set_new_seed(seed)
