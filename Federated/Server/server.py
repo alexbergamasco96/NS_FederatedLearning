@@ -57,12 +57,14 @@ class Server():
         self.clients = self.generateWorkers(self.num_workers, self.model_type, optimizer=optimizer, initialLR=settings.initialLR)
         self.current_round = 0
         self.LRdecay = settings.LRdecay
-        self.mean = self.initializeMean()
+        self.mean = self.initializeMean() # Adaptive-FedAVG mean initialization
         self.previous_mean = copy.deepcopy(self.mean)
-        self.variance = 0
+        self.previous_mean_loss = 0 
+        self.mean_loss = 0 # Adaptive-FedAVG loss-based mean initialization
+        self.variance = 0 # Adaptive-FedAVG variance initialization
         self.previous_variance = 0
         self.LRcoeff = 0
-        self.c = 0
+        self.c = 0 # FedREG coefficient
         
         
     
@@ -82,7 +84,9 @@ class Server():
         
         
     def generateWorkers(self, num_workers, model_type, optimizer, initialLR):
-        
+        '''
+        Generate the set of workers, with same model and optimizer
+        '''
         client_list = []
         for i in range(num_workers):
             client_list.append(Client(initialLR, optimizer=optimizer, model_type=self.model_type))
@@ -90,19 +94,10 @@ class Server():
         return client_list
     
     
-    '''
-    def generateDataset(self, dataset_size, num_rounds, multi_features=False, model_drift=False):
-        
-        if self.model_type == 'MNIST':
-            ###
-        elif self.model_type == 'CIFAR':
-            ###
-        else: #synthetic
-            self.generateSyntheticDataset(self, dataset_size, num_rounds, multi_features=False, model_drift=False)
-    '''
-    
     def generateSyntheticDataset(self, dataset_size, num_rounds, multi_features=False, model_drift=False):
-        
+        '''
+        Synthetic dataset generator, for synthetic tests
+        '''
         self.initializeComputation(num_rounds)
         self.datasetGenerator = DatasetGenerator(num_workers=self.num_workers, num_rounds=num_rounds)
         train_list_X, train_list_y, self.test_X, self.test_y = self.datasetGenerator.generate(dataset_size, multi_features, model_drift)
@@ -123,10 +118,12 @@ class Server():
     
     
     def generateMNISTDataset(self, num_rounds):
-        
+        '''
+        Setting Distributed MNIST dataset for Class-Introduction concept drift
+        '''
         self.num_rounds = num_rounds
         
-        # Image augmentation 
+        # Image Modification 
         transform_train = transforms.Compose([
                                            torchvision.transforms.ToTensor(),
                                            torchvision.transforms.Normalize((0.1307,), (0.3081,))]
@@ -167,12 +164,121 @@ class Server():
         for i in range(len(train_loader)):
             self.clients[i].train_loader = train_loader[i]
             
+            
+    def generateMNISTDatasetTwoClasses(self, num_rounds):
+        '''
+        Setting Distributed MNIST dataset for Two-Class swap concept drift
+        '''
+        self.num_rounds = num_rounds
+        
+        # Image modification 
+        transform_train = transforms.Compose([
+                                           torchvision.transforms.ToTensor(),
+                                           torchvision.transforms.Normalize((0.1307,), (0.3081,))]
+                                       )
+        
+        # Loading MNIST using torchvision.datasets
+        traindata = torchvision.datasets.MNIST('./data', train=True, download=True,
+                               transform= transform_train)
+        
+        
+        remove_list = [2,3,4,5,6,7,8,9]
+            
+        traindata = trainFiltering(traindata, remove_list, self.num_workers)
+        
+        if self.current_round >= (self.num_rounds/2) :
+            traindata.targets.apply_(lambda x: 1 if x==0 else (0 if x==1 else x))
+        
+        # Dividing the training data into num_clients, with each client having equal number of images
+        traindata_split = torch.utils.data.random_split(traindata, [int(traindata.data.shape[0] / self.num_workers) for _ in range(self.num_workers)])
+        
+        # Creating a pytorch loader for a Deep Learning model
+        train_loader = [torch.utils.data.DataLoader(x, batch_size=settings.batch_size, shuffle=True) for x in traindata_split]
+        
+        
+        
+        testdata = torchvision.datasets.MNIST('./data', train=False, transform=transforms.Compose([
+                                           torchvision.transforms.ToTensor(),
+                                           torchvision.transforms.Normalize((0.1307,), (0.3081,))]
+                                       ))
+        
+        
+        len_test_dataset = int(len(traindata) / 3)
+        testdata = testFiltering(testdata, remove_list, len_test_dataset)
+        
+        if self.current_round >= (self.num_rounds/2) :
+            testdata.targets.apply_(lambda x: 1 if x==0 else 0)
+        
+        # Loading the test iamges and thus converting them into a test_loader
+        self.test_loader = torch.utils.data.DataLoader( testdata, batch_size=settings.batch_size, shuffle=True)
+        
+        for i in range(len(train_loader)):
+            self.clients[i].train_loader = train_loader[i]
+            
+            
+            
+    def generateMNISTDatasetSwapClasses(self, num_rounds):
+        '''
+        Setting Distributed MNIST dataset for Class-Swap concept drift
+        '''
+        self.num_rounds = num_rounds
+        
+        # Image modification 
+        transform_train = transforms.Compose([
+                                           torchvision.transforms.ToTensor(),
+                                           torchvision.transforms.Normalize((0.1307,), (0.3081,))]
+                                       )
+        
+        # Loading MNIST using torchvision.datasets
+        traindata = torchvision.datasets.MNIST('./data', train=True, download=True,
+                               transform= transform_train)
+        
+        
+        remove_list = []
+            
+        traindata = trainFiltering(traindata, remove_list, self.num_workers)
+        
+        if self.current_round >= (self.num_rounds/2) :
+            traindata.targets.apply_(lambda x: 1 if x==0 else (0 if x==1 else x))
+        
+        # Dividing the training data into num_clients, with each client having equal number of images
+        traindata_split = torch.utils.data.random_split(traindata, [int(traindata.data.shape[0] / self.num_workers) for _ in range(self.num_workers)])
+        
+        # Creating a pytorch loader for a Deep Learning model
+        train_loader = [torch.utils.data.DataLoader(x, batch_size=settings.batch_size, shuffle=True) for x in traindata_split]
+        
+        
+        
+        testdata = torchvision.datasets.MNIST('./data', train=False, transform=transforms.Compose([
+                                           torchvision.transforms.ToTensor(),
+                                           torchvision.transforms.Normalize((0.1307,), (0.3081,))]
+                                       ))
+        
+        
+        len_test_dataset = int(len(traindata) / 3)
+        testdata = testFiltering(testdata, remove_list, len_test_dataset)
+        
+        if self.current_round >= (self.num_rounds/2) :
+            testdata.targets.apply_(lambda x: 1 if x==0 else (0 if x==1 else x))
+        
+        # Loading the test iamges and thus converting them into a test_loader
+        self.test_loader = torch.utils.data.DataLoader( testdata, batch_size=settings.batch_size, shuffle=True)
+        
+        for i in range(len(train_loader)):
+            self.clients[i].train_loader = train_loader[i]
+    
+    
+    
     
     def generateCIFARDataset(self, num_rounds):
         
+        '''
+        Setting Distributed CIFAR dataset for Class-Introduction concept drift
+        '''
+        
         self.num_rounds = num_rounds
         
-        # Image transformation (No Augmentation)
+        # Image transformation 
         transform_train = transforms.Compose([
                 transforms.ToTensor(),
                 transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
@@ -218,34 +324,130 @@ class Server():
         for i in range(len(train_loader)):
             self.clients[i].train_loader = train_loader[i]
             
+            
+            
+    def generateCIFARDatasetTwoClasses(self, num_rounds):
         
+        '''
+        Setting Distributed CIFAR dataset for Two-Class swap concept drift
+        '''
+        
+        self.num_rounds = num_rounds
+        
+        # Image transformation
+        transform_train = transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+        ])
+        
+        # Loading CIFAR10 using torchvision.datasets
+        traindata = torchvision.datasets.CIFAR10('./data', train=True, download=True,
+                               transform= transform_train)
+        
+        
+        traindata.targets = torch.LongTensor(traindata.targets) 
+        
+        remove_list = [2,3,4,5,6,7,8,9]
+        
+        if self.current_round >= (self.num_rounds/2) :
+            traindata.targets.apply_(lambda x: 1 if x==0 else (0 if x==1 else x))
+        
+        traindata = trainFiltering(traindata, remove_list, self.num_workers)
+        
+        
+        
+        # Dividing the training data into num_clients, with each client having equal number of images
+        traindata_split = torch.utils.data.random_split(traindata, [int(traindata.data.shape[0] / self.num_workers) for _ in range(self.num_workers)])
+        
+        # Creating a pytorch loader for a Deep Learning model
+        train_loader = [torch.utils.data.DataLoader(x, batch_size=settings.batch_size, shuffle=True) for x in traindata_split]
+        
+        
+        # Importing test data
+        testdata = torchvision.datasets.CIFAR10('./data', train=False, transform=transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+                ]))
+        
+        # Changing type of data.target (in CIFAR10 is a list, not a tensor)
+        testdata.targets = torch.LongTensor(testdata.targets)
+        
+        len_test_dataset = int(len(traindata) / 3)
+        testdata = testFiltering(testdata, remove_list, len_test_dataset)
+        
+        if self.current_round >= (self.num_rounds/2) :
+            testdata.targets.apply_(lambda x: 1 if x==0 else (0 if x==1 else x))
+        
+        # Converting images into a test_loader
+        self.test_loader = torch.utils.data.DataLoader( testdata, batch_size=settings.batch_size, shuffle=True)
+        
+        # setting the train_loaders client-side
+        for i in range(len(train_loader)):
+            self.clients[i].train_loader = train_loader[i]
+            
+    
+    def generateCIFARDatasetSwapClasses(self, num_rounds):
+        
+        '''
+        Setting Distributed CIFAR dataset for Class-Swap concept drift
+        '''
+        
+        self.num_rounds = num_rounds
+        
+        # Image transformation (No Augmentation)
+        transform_train = transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+        ])
+        
+        # Loading CIFAR10 using torchvision.datasets
+        traindata = torchvision.datasets.CIFAR10('./data', train=True, download=True,
+                               transform= transform_train)
+        
+        traindata.targets = torch.LongTensor(traindata.targets)
+        
+        if self.current_round >= (self.num_rounds/2) :
+            traindata.targets.apply_(lambda x: 1 if x==0 else (0 if x==1 else x))
+        
+        remove_list = []
+            
+        
+        traindata = trainFiltering(traindata, remove_list, self.num_workers)
+        
+        # Dividing the training data into num_clients, with each client having equal number of images
+        traindata_split = torch.utils.data.random_split(traindata, [int(traindata.data.shape[0] / self.num_workers) for _ in range(self.num_workers)])
+        
+        # Creating a pytorch loader for a Deep Learning model
+        train_loader = [torch.utils.data.DataLoader(x, batch_size=settings.batch_size, shuffle=True) for x in traindata_split]
+        
+        
+        # Importing test data
+        testdata = torchvision.datasets.CIFAR10('./data', train=False, transform=transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+                ]))
+        
+        # Changing type of data.target (in CIFAR10 is a list, not a tensor)
+        testdata.targets = torch.LongTensor(testdata.targets)
+            
+        if self.current_round >= (self.num_rounds/2) :
+            testdata.targets.apply_(lambda x: 1 if x==0 else (0 if x==1 else x))
+        
+        len_test_dataset = int(len(traindata) / 3)
+        testdata = testFiltering(testdata, remove_list, len_test_dataset)
+        
+        # Converting images into a test_loader
+        self.test_loader = torch.utils.data.DataLoader( testdata, batch_size=settings.batch_size, shuffle=True)
+        
+        # setting the train_loaders client-side
+        for i in range(len(train_loader)):
+            self.clients[i].train_loader = train_loader[i]
         
         
     
     def initializeComputation(self, num_rounds):
         self.num_rounds = num_rounds
         self.current_round= 0
-   
-    
-    
-    def getClientsParameters(self):
-        params = []
-        for i in self.clients:
-            params.append(i.getParameters())
-            
-        return params
-        
-    
-    def sendParams(self):
-        for i in self.clients:
-            i.setParameters(list(self.model.parameters()))
-    
-    def setCurrentParameters(self, newParameters):
-        with torch.no_grad():
-            param_index = 0
-            for p in self.model.parameters():
-                p.data = newParameters[param_index].data.detach().clone()
-                param_index += 1
         
     
     def aggregate(self):
@@ -257,16 +459,14 @@ class Server():
         elif self.aggregation_method == 'FedAda':
             newParameters = self.averageParameters()
             self.adaptiveLR(newParameters)
+        elif self.aggregation_method == 'FedAda_loss_based':
+            newParameters = self.averageParameters()
+            loss = self.averageLoss()
+            self.adaptiveLR_Loss_Based(loss)
         else: #FedAVG
             newParameters = self.averageParameters()
+            # Decay of Learning Rate
             self.lrdecay()
-            '''
-            f = open("log.txt", "a")
-            for g in self.clients[0].optimizer.param_groups:
-                f.write("---Round {}\t".format(self.current_round))
-                f.write("LR: {:.6f}\t".format(g['lr']))
-            f.close()
-            '''
         
         self.setCurrentParameters(newParameters)
         
@@ -281,6 +481,15 @@ class Server():
         return newParameters
     
     
+    def averageLoss(self):
+        '''
+        Retrieve local losses and perform the average
+        '''
+        losses = self.getClientLosses()
+        loss = np.mean(losses)
+        
+        return loss
+    
     
     def adaptiveLR(self, newParameters):
         
@@ -292,13 +501,16 @@ class Server():
                 
         # EMA on the mean
         self.mean = self.previous_mean * settings.beta1 + (1-settings.beta1)*newParameters_arr
-        self.previous_mean = copy.deepcopy(self.mean)
+        
         # Initialization Bias correction
         self.mean = self.mean / (1-pow(settings.beta1, self.current_round+1))
         
         
         # EMA on the Variance
-        self.variance = self.previous_variance * settings.beta2 + (1 - settings.beta2)*np.mean((newParameters_arr-self.mean)*(newParameters_arr-self.mean))
+        self.variance = self.previous_variance * settings.beta2 + (1 - settings.beta2)*np.mean((newParameters_arr-self.previous_mean)*(newParameters_arr-self.previous_mean))
+        
+        self.previous_mean = copy.deepcopy(self.mean)
+        
         temp = copy.deepcopy(self.previous_variance)
         self.previous_variance = copy.deepcopy(self.variance)
         # Initialization Bias correction
@@ -313,15 +525,72 @@ class Server():
         
         coeff = self.LRcoeff/ (1-pow(settings.beta3,self.current_round +1))
         
+        
+        ### SERVER-SIDE LEARNING RATE SCHEDULER 
+        
+        #No Decay
+        #coeff = min(settings.initialLR, settings.initialLR*coeff)
+        
+        #Decay of 1/t TIME BASED DECAY as in the convergence analysis of FedAVG
         coeff = min(settings.initialLR, (settings.initialLR*coeff)/(self.current_round+1))
         
+        #Decay of 0.99
+        #coeff = min(settings.initialLR, settings.initialLR*coeff*math.pow(0.99, self.current_round))
+        
+        
+        # Setting the new LR 
+        for i in self.clients:
+            i.setLR(coeff)
+            
+            
+            
+            
+    def adaptiveLR_Loss_Based(self, loss):
+                
         '''
-        f = open("log.txt", "a")
-        f.write("---Round {}\t".format(self.current_round))
-        f.write("Var_Ratio: {:.3f}\t".format(r))
-        f.write("Coeff: {:.6f}\n".format(coeff))
-        f.close()
+        Loss-Based Adaptive FedAVG solution
         '''
+            
+        # EMA on the mean
+        self.mean_loss = self.previous_mean_loss * settings.beta1 + (1-settings.beta1)*loss
+        
+        # Initialization Bias correction
+        self.mean_loss = self.mean_loss / (1-pow(settings.beta1, self.current_round+1))
+        
+        
+        # EMA on the Variance
+        self.variance = self.previous_variance * settings.beta2 + (1 - settings.beta2)*(loss-self.previous_mean_loss)*(loss-self.previous_mean_loss)
+        
+        self.previous_mean_loss = copy.deepcopy(self.mean_loss)
+        
+        temp = copy.deepcopy(self.previous_variance)
+        self.previous_variance = copy.deepcopy(self.variance)
+        # Initialization Bias correction
+        self.variance = self.variance / (1-pow(settings.beta2, self.current_round+1))
+        
+        if self.current_round < 2:
+            r = 1
+        else:
+            r = np.abs(self.variance / (temp/(1-pow(settings.beta2, self.current_round))))
+        
+        self.LRcoeff = self.LRcoeff * settings.beta3 + (1-settings.beta3)*r
+        
+        coeff = self.LRcoeff/ (1-pow(settings.beta3,self.current_round +1))
+        
+        
+        
+        ### SERVER SCHEDULER Choosing the decay
+        
+        #No Decay
+        #coeff = min(settings.initialLR, settings.initialLR*coeff)
+        
+        #Decay of 1/t TIME BASED DECAY as in the convergence analysis of FedAVG
+        coeff = min(settings.initialLR, (settings.initialLR*coeff)/(self.current_round+1))
+        
+        #Decay of 0.99 per round
+        #coeff = min(settings.initialLR, settings.initialLR*coeff*math.pow(0.99, self.current_round))
+        
+        
         for i in self.clients:
             #i.decayLR(coeff)
             i.setLR(coeff)
@@ -351,6 +620,9 @@ class Server():
     
     
     def fullTraining(self):
+        '''
+        Synthetic dataset training phase
+        '''
         error_list = []
         score_list = []
         for i in range(self.current_round, self.datasetGenerator.num_rounds):
@@ -362,12 +634,17 @@ class Server():
             self.current_round += 1
         return error_list, score_list    
     
+    
+    
+    
     def fullTrainingMNIST(self):
         
         error_list = []
         score_list = []
         
         for i in range(self.current_round, self.num_rounds):
+            
+            # Change this row for a different Concept Drift
             self.generateMNISTDataset(settings.num_rounds)
             self.trainMNIST()
             self.aggregate()
@@ -377,13 +654,17 @@ class Server():
             
             f = open("log.txt", "a")
             f.write("---Round {}\t".format(self.current_round))
-            f.write("Score: {:.3f}\n".format(score))
+            f.write("Score: {:.4f}\tLoss: {:.4f}\n".format(score, error))
             f.close()
+            
             
             self.current_round += 1
             
             
         return error_list, score_list
+    
+    
+    
     
     def fullTrainingCIFAR(self):
         
@@ -391,6 +672,8 @@ class Server():
         score_list = []
         
         for i in range(self.current_round, self.num_rounds):
+            
+            # Change this row for a different Concept Drift
             self.generateCIFARDataset(settings.num_rounds)
             self.trainCIFAR()
             self.aggregate()
@@ -399,35 +682,42 @@ class Server():
             score_list.append(score)
             self.current_round += 1
             
-            
             f = open("log.txt", "a")
             f.write("---Round {}\t".format(self.current_round))
-            f.write("Score: {:.3f}\n".format(score))
+            f.write("Score: {:.4f}\tLoss: {:.4f}\n".format(score, error))
             f.close()
             
             
         return error_list, score_list 
     
+    
     def trainMNIST(self):
         self.sendParams()
         for i in self.clients:
-            i.trainMNIST(current_round=self.current_round, local_epochs=5)
-            
+            i.trainMNIST(current_round=self.current_round, local_epochs=settings.local_epochs)
+    
+    
     def trainCIFAR(self):
         self.sendParams()
         for i in self.clients:
-            i.trainCIFAR(current_round=self.current_round, local_epochs=5)
+            i.trainCIFAR(current_round=self.current_round, local_epochs=settings.local_epochs)
+    
     
     def train(self):
         self.sendParams()
         for i in self.clients:
             i.train(current_round=self.current_round, local_epochs=settings.local_epochs)
             
-        #self.current_round += 1
+   
         
     
+    
+    
     def test(self):
-        
+        '''
+        Synthetic data tester
+        '''
+       
         self.model.eval()
         
         if self.datasetGenerator.model_drift:
@@ -449,6 +739,7 @@ class Server():
         return error, score
     
     
+    
     def testMNIST(self):
         self.model.eval()
         test_loss = 0
@@ -457,7 +748,8 @@ class Server():
             for data, target in self.test_loader:
                 data, target = Variable(data), Variable(target)
                 output = self.model(data)
-                test_loss += F.nll_loss(output, target, reduction='sum').item()  # sum up batch loss
+                #test_loss += F.nll_loss(output, target, reduction='sum').item()  # sum up batch loss
+                test_loss += self.criterion(output, target).item()
                 pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
                 correct += pred.eq(target.view_as(pred)).sum().item()
     
@@ -467,7 +759,10 @@ class Server():
         
         return test_loss, acc
     
+    
+    
     def testCIFAR(self):
+   
         self.model.eval()
         test_loss = 0
         correct = 0
@@ -488,6 +783,9 @@ class Server():
     
     
     def lrdecay(self):
+        '''
+        Decay client-side (not managed by a server scheduler
+        '''
         if self.LRdecay:
             for i in self.clients:
                 i.decayLR()
@@ -497,7 +795,32 @@ class Server():
         return list(self.model.parameters())
 
                 
+    def getClientsParameters(self):
+        params = []
+        for i in self.clients:
+            params.append(i.getParameters())
+            
+        return params
     
+    
+    def getClientLosses(self):
+        losses = []
+        for i in self.clients:
+            losses.append(i.getLoss())
+            
+        return losses
+        
+    
+    def sendParams(self):
+        for i in self.clients:
+            i.setParameters(list(self.model.parameters()))
+    
+    def setCurrentParameters(self, newParameters):
+        with torch.no_grad():
+            param_index = 0
+            for p in self.model.parameters():
+                p.data = newParameters[param_index].data.detach().clone()
+                param_index += 1
         
         
         

@@ -25,7 +25,9 @@ from torch.autograd import Variable
 
 
 def setLossOptimizer(model, learning_rate, optimizer):        
-    
+    '''
+     Set the loss and the optimizer for the model (server/client-side)
+    '''
     #criterion = torch.nn.MSELoss()
     criterion = nn.criterion = nn.CrossEntropyLoss(reduction='sum')
     
@@ -64,7 +66,7 @@ def paramsSum(num_clients, params):
 
 def calculateFedREGParams(num_clients, global_params, new_params, c):
     '''
-    Standard calculation of FedREG
+    Standard calculation of FedREG, old algorithm
     '''
     
     with torch.no_grad():
@@ -112,7 +114,7 @@ def calculateFedREGParamsWithAdaption(num_clients, global_params, new_params, cu
 
 def calculateFedAVGParams(num_clients, params):
     '''
-    Perform the averaging of the parameters
+    Perform the averaging of the parameters (FedAVG-style)
     '''
     with torch.no_grad():
         new_params = []

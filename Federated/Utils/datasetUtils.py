@@ -22,43 +22,13 @@ from torch.autograd import Variable
 
 from Federated.Utils import settings
 
-#----- Regression Parameters
-"""
 
-'''
-    The function is defined as:    
-    
-    y = m[0]*sin(X*m[1]*phi)+m[2]
-'''
-
-''' Params for Periodic Function'''
-
-m = [10.0, 0.1, 1.5] #before drift
-mm = [6.0, 0.15, -3.0] #after drift
-
-
-''' Params for Linear Function '''
-'''
-m = [3.0, 0.5, 1.5, 1.0] #before drift
-mm = [4.0, 1.0, 0.5, 2.5] #after drift
-'''
-
-
-v = 0.5 # noise
-
-function_type = 'periodic' # 'linear' or 'periodic'
-
-
-
-drifts = 1  # different models
-
-range_min = 0    #min value of X
-range_max = 20    #max value of X
-train_percentage = 0.8 #train-test split
-
-"""
 
 class DatasetGenerator():
+    
+    '''
+    Function for the old linear tests. 
+    '''
     
     def __init__(self, num_workers, num_rounds):
         self.num_workers = num_workers
@@ -82,6 +52,10 @@ class DatasetGenerator():
 
 def splitDataset(dataset_X, num_workers, num_rounds):
     
+    '''
+    Function for the old linear tests. 
+    '''
+    
     # total number of sets to generate
     a = num_workers * num_rounds
     
@@ -93,7 +67,11 @@ def splitDataset(dataset_X, num_workers, num_rounds):
 
 
 def synthetic_dataset_creator(dataset_size, num_workers, num_rounds, multi_features=False, model_drift=False):
-
+    
+    '''
+    Function for the old synthetic tests. 
+    '''
+    
     train_list_X = [] 
     train_list_y = []
     test_X = []
@@ -131,6 +109,10 @@ def synthetic_dataset_creator(dataset_size, num_workers, num_rounds, multi_featu
 
 
 def generate_data(dataset_size, num_workers, num_rounds, after_drift=False, multi_features=False):
+    
+    '''
+    Function for the old linear tests. 
+    '''
     
     if multi_features is True:
         

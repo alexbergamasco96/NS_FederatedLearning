@@ -37,7 +37,8 @@ class mnistFFNN(torch.nn.Module):
         x = self.l2(x)
         x = F.relu(x)
         x = self.l3(x)
-        return F.log_softmax(x)
+        return x
+        # return F.log_softmax(x)
 
 
 class mnistCNN(torch.nn.Module):
@@ -58,7 +59,8 @@ class mnistCNN(torch.nn.Module):
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         return F.log_softmax(x)
-    
+        #return x
+        
     def num_flat_features(self, x):
         size = x.size()[1:]  # all dimensions except the batch dimension
         num_features = 1
@@ -87,7 +89,8 @@ class cifarCNN(torch.nn.Module):
         x = x.view(-1, self.num_flat_features(x))
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
-        return F.softmax(x)
+        return x
+        # return F.softmax(x)
     
     def num_flat_features(self, x):
         size = x.size()[1:]  # all dimensions except the batch dimension
@@ -98,7 +101,9 @@ class cifarCNN(torch.nn.Module):
 
 
 class periodicModel(torch.nn.Module):
-    
+    '''
+    Synthetic dataset models, optimized for periodic functions
+    '''
     def __init__(self, inputSize, outputSize, H = 64):
         
         super(periodicModel, self).__init__()
@@ -117,7 +122,9 @@ class periodicModel(torch.nn.Module):
 
     
 class linearModel(torch.nn.Module):
-    
+    '''
+    Synthetic dataset models, only linear activation functions
+    '''
     def __init__(self, inputSize, outputSize, H = 20):
         
         super(linearModel, self).__init__()
@@ -132,7 +139,9 @@ class linearModel(torch.nn.Module):
     
 
 class nonLinearModel(torch.nn.Module):
-    
+    '''
+    Synthetic dataset models with nonlinearities
+    '''
     def __init__(self, inputSize, outputSize, H = 20):
         
         super(nonLinearModel, self).__init__()
@@ -147,7 +156,10 @@ class nonLinearModel(torch.nn.Module):
     
 
 def createModel(input_size, output_size, initialLR, hidden=64, model_type='periodic', optimizer='SGD'):
-    
+    '''
+     return instance of related model, optimizer and loss.
+     Hidden units required only for linear, non linear and periodic.
+    '''
     if model_type == 'linear':
         model = linearModel(input_size, output_size, H=hidden)
     elif model_type == 'non_linear':
@@ -164,15 +176,12 @@ def createModel(input_size, output_size, initialLR, hidden=64, model_type='perio
     criterion, optimizer = setLossOptimizer(model, initialLR, optimizer)
     return model, criterion, optimizer
 
-'''
-def setLossOptimizer(model, learning_rate):        
-    criterion = torch.nn.MSELoss()
-    optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)    
-    return criterion, optimizer
-'''
+
 
 def model_creator(input_size, output_size, num_workers, hidden=64, model_type='periodic'):
-    
+    '''
+     Synthetic dataset model creation
+    '''
     w = []
     
     if model_type == 'linear':
@@ -191,102 +200,3 @@ def model_creator(input_size, output_size, num_workers, hidden=64, model_type='p
         w_avg.append(copy.deepcopy(w[0]))
         
     return w, w_avg
-
-"""
-def paramsSum(num_clients, params):
-    '''
-    new_params contains the list of params, calculated as the sum over all the models
-    '''
-    new_params = []
-    
-    for param_i in range(len(params[0])):
-        spdz_params = list()
-
-        for remote_index in range(num_clients):
-            spdz_params.append(params[remote_index][param_i])
-
-        spdz = torch.tensor([0.0]).float()
-
-        for k in spdz_params:
-            spdz = spdz + k
-
-        new_param = (spdz)
-        new_params.append(new_param)
-    
-    return new_params  
-
-
-def calculateFedREGParams(num_clients, global_params, new_params, c):
-    '''
-    Standard calculation of FedREG
-    '''
-    
-    with torch.no_grad():
-        for i in range(len(global_params)):
-            for j in range(len(global_params[i])):
-                global_params[i][j] = ((c * global_params[i][j] + new_params[i][j]) / (c + len(num_clients))).data.detach().clone()
-    
-    return global_params
-
-
-def calculateFedREGParamsWithAdaption(num_clients, global_params, new_params, current_round, c):
-    '''
-    FedREG with distance term.
-        global_params:  last aggregated parameters
-        new_params:     sum of parameters received at this round
-        round:          current round of computation 
-    '''
-    
-    with torch.no_grad():
-        
-        # calculating the distance from the new parameters
-        distance = 0
-        for i in range(len(global_params)):
-            distance += torch.norm((global_params[i] - new_params[i]/num_clients))
-        
-        # distance is divided by the len of params
-        #distance /= len(global_params)
-
-        # setting beta: parameter that express the distance 
-        if current_round == 0:
-            # first round we don't care about the distance. First iteration
-            beta = 1
-        else:
-            # If distance = inf, then beta is 0 and the algorithm becomes FedAVG (but with constant LR)
-            beta = (1 / (1 + distance)) 
-        
-        
-        for i in range(len(global_params)):
-            for j in range(len(global_params[i])):
-                global_params[i][j] = ((c *beta* global_params[i][j] + new_params[i][j]) / (c*beta + num_clients)).data.detach().clone()
-    
-    
-    return global_params, beta
-
-
-def calculateFedAVGParams(num_clients, params):
-    '''
-    Perform the averaging of the parameters
-    '''
-    with torch.no_grad():
-        new_params = []
-
-        for param_i in range(len(params[0])):
-
-            spdz_params = []
-
-            for remote_index in range(num_clients):
-                spdz_params.append(params[remote_index][param_i])
-
-            spdz = torch.tensor([0.0]).float()
-
-            for k in spdz_params:
-                spdz = spdz + k
-
-            new_param = (spdz) / num_clients
-            new_params.append(new_param)
-    
-    return new_params
-    
-    
-"""

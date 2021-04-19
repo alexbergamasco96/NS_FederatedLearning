@@ -7,28 +7,51 @@ Created on Wed Dec  9 16:08:30 2020
 """
 
 
-# ----- Federated Parameters
+# -------------- Federated Parameters
 
-num_workers = 32        # Number of workers
+num_workers = 64        # Number of workers
 num_rounds = 40       # Total number of rounds
 
-dataset_size = 24000    # dataset size
-multi_features = False  # Multi Feature inputs
-model_drift = True     # Drift of the model after [num_rounds/2] rounds
-
 initialLR = 1e-2
-#learning_rate = 1e-2   # LR (same for FedAVG and FedREG)
+
 local_epochs = 5     # Epochs performed client-side
 batch_size = 32         # Batch_size for local training phase
 
 LRdecay = True        # False (= decay not required) in case of Full Gradient Descent
-adaptive_FedREG = False
 
 
-model_type= 'MNISTFFNN' #Type of Neural Network. 'linear', 'non_linear', 'periodic' (optimized for periodic functions)
+ 
+#Type of Neural Network. MNISTFFNN, MNISTCNN, CIFARCNN
+model_type= 'MNISTFFNN'
+
+
+### Classes to remove before the drift in case of Class-Introduction concept drift 
+
+remove_list = [7,8,9]
+
+
+### Adaptive Parameters, Decay rates of EMAs
+
+beta1 = 0.5  # beta coefficient in parameters EMA
+beta2 = 0.5  # beta coefficient in variance EMA
+beta3 = 0.5  # beta coefficient in coeff EMA
 
 
 
+
+
+
+
+
+##############################
+## Synthetic dataset Tests, Old code
+##############################
+
+adaptive_FedREG = False  # Old Algorithm
+
+dataset_size = 24000    # dataset size, Linear Tests only
+multi_features = False  # Multi Feature inputs, Linear Test only
+model_drift = True     # Drift of the model after [num_rounds/2] rounds, Linear Tests Only
 
 
 hiddenNeurons = 64
@@ -67,12 +90,6 @@ v = 1 # noise
 function_type = 'periodic' # 'linear' or 'periodic'
 
 
-'''
-    MNIST Parameters
-'''
-remove_list = [7,8,9]
-
-
 
 drifts = 1  # different models
 
@@ -82,14 +99,3 @@ train_percentage = 0.8 #train-test split
 
 
 
-
-
-
-
-
-'''
-    Adaptive Parameters
-'''
-beta1 = 0.5  # beta coefficient in parameters EMA
-beta2 = 0.5  # beta coefficient in variance EMA
-beta3 = 0.5  # beta coefficient in coeff EMA
